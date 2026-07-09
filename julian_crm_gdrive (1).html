@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Julian's CRM</title>
+<script src="https://accounts.google.com/gsi/client"></script>
+<style>
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f4f0;
+    --bg-tertiary: #ece9e2;
+    --text-primary: #1a1a1a;
+    --text-secondary: #6b6a66;
+    --text-tertiary: #9a9890;
+    --border: #ddd9d0;
+    --accent: #185fa5;
+    --accent-bg: #e6f1fb;
+    --success: #3b6d11;
+    --success-bg: #eaf3de;
+    --warning: #854f0b;
+    --warning-bg: #faeeda;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+  #authScreen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 1.5rem;
+  }
+  #authScreen h1 { font-size: 24px; font-weight: 600; }
+  #authScreen p { color: var(--text-secondary); font-size: 14px; text-align: center; max-width: 340px; }
+  #app { display: none; flex: 1; min-height: 100vh; }
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    padding: 1.25rem 0;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-top { padding: 0 1.25rem 1.25rem; display: flex; align-items: center; justify-content: space-between; }
+  .sidebar-top h1 { font-size: 15px; font-weight: 700; }
+  .sidebar-top .user-dot {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--accent-bg);
+    color: var(--accent); font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    title: "Sign out";
+  }
+  .nav-label {
+    font-size: 11px; color: var(--text-tertiary);
+    margin: 0 0 6px 1.25rem;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 1.25rem; font-size: 13px; cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .nav-item:hover { background: var(--bg-tertiary); }
+  .nav-item.active { background: var(--bg-primary); font-weight: 600; color: var(--text-primary); }
+  .sidebar-footer { margin-top: auto; padding: 1rem 1.25rem; }
+  .sync-status {
+    font-size: 11px; color: var(--text-tertiary);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; }
+  .sync-dot.ok { background: #3b6d11; }
+  .sync-dot.saving { background: #854f0b; }
+  .sync-dot.error { background: #a32d2d; }
+  .main { flex: 1; min-width: 0; padding: 1.5rem 2rem; }
+  .topbar {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 1.25rem;
+    flex-wrap: wrap; gap: 10px;
+  }
+  .topbar h2 { font-size: 20px; font-weight: 600; }
+  .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type="text"], input[type="number"], input[type="date"],
+  input[type="email"], select {
+    height: 36px; padding: 0 10px;
+    border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--bg-primary); color: var(--text-primary);
+    font-family: inherit; font-size: 14px;
+  }
+  textarea {
+    padding: 8px 10px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--bg-primary);
+    color: var(--text-primary); font-family: inherit; font-size: 14px; resize: vertical;
+  }
+  button {
+    height: 36px; padding: 0 14px;
+    border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--bg-primary); color: var(--text-primary);
+    cursor: pointer; font-family: inherit; font-size: 14px;
+  }
+  button:hover { background: var(--bg-tertiary); }
+  button.primary { background: var(--text-primary); color: var(--bg-primary); border-color: var(--text-primary); }
+  button.primary:hover { opacity: 0.85; }
+  button.icon-btn { width: 36px; padding: 0; }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px; margin-bottom: 1.5rem;
+  }
+  .stat-card { background: var(--bg-secondary); border-radius: var(--radius); padding: 1rem; }
+  .stat-card .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .stat-card .value { font-size: 22px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; background: var(--bg-primary); border-radius: var(--radius-lg); overflow: hidden; }
+  thead tr { border-bottom: 1px solid var(--border); }
+  th { text-align: left; padding: 10px; color: var(--text-secondary); font-weight: 600; background: var(--bg-secondary); }
+  td { padding: 10px; border-bottom: 1px solid var(--border); }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--bg-secondary); }
+  .badge { font-size: 12px; padding: 2px 10px; border-radius: var(--radius); display: inline-block; }
+  .badge-active { background: var(--success-bg); color: var(--success); }
+  .badge-lead { background: var(--warning-bg); color: var(--warning); }
+  .badge-inactive, .badge-dormant { background: var(--bg-tertiary); color: var(--text-secondary); }
+  .empty-state { text-align: center; padding: 3rem 0; color: var(--text-secondary); }
+  .card {
+    background: var(--bg-primary); border-radius: var(--radius-lg);
+    border: 1px solid var(--border); padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+  }
+  .detail-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 1rem;
+  }
+  .avatar {
+    width: 46px; height: 46px; border-radius: 50%;
+    background: var(--accent-bg); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 15px; flex-shrink: 0;
+  }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
+  .tab-item {
+    padding: 9px 16px; font-size: 14px; cursor: pointer;
+    border-bottom: 2px solid transparent; color: var(--text-secondary);
+  }
+  .tab-item.active { border-bottom: 2px solid var(--text-primary); color: var(--text-primary); font-weight: 600; }
+  .info-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .info-table td { border-bottom: none; padding: 6px 0; }
+  .info-table td:first-child { color: var(--text-secondary); width: 40%; }
+  .comment-item { border-left: 2px solid var(--border); padding-left: 12px; margin-bottom: 14px; }
+  .comment-date { font-size: 12px; color: var(--text-secondary); margin-bottom: 3px; }
+  .comment-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45); align-items: center;
+    justify-content: center; z-index: 100; padding: 1rem;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--bg-primary); border-radius: var(--radius-lg);
+    padding: 1.5rem; width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
+  }
+  .modal-box h3 { font-size: 17px; font-weight: 600; margin-bottom: 1rem; }
+  .form-grid { display: flex; flex-direction: column; gap: 10px; }
+  .form-row { display: flex; flex-direction: column; gap: 4px; }
+  .form-row label { font-size: 12px; color: var(--text-secondary); }
+  .form-row input, .form-row select, .form-row textarea { width: 100%; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 1.25rem; }
+  .toast {
+    position: fixed; bottom: 1.5rem; right: 1.5rem;
+    background: var(--text-primary); color: var(--bg-primary);
+    padding: 10px 18px; border-radius: var(--radius); font-size: 13px;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 200;
+  }
+  .toast.show { opacity: 1; }
+  @media (max-width: 700px) {
+    .layout { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; padding: 0.75rem 1rem; }
+    .sidebar-top { padding: 0; }
+    .main { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="authScreen">
+  <h1>Julian's CRM</h1>
+  <p>Sign in with your Google account to access your client database synced to Google Drive.</p>
+  <div id="signInBtn"></div>
+  <p id="authError" style="color:#a32d2d; display:none;"></p>
+</div>
+
+<div id="app">
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-top">
+        <h1>Julian's CRM</h1>
+        <div class="user-dot" id="userDot" title="Sign out" onclick="signOut()"></div>
+      </div>
+      <p class="nav-label">Forex clients</p>
+      <div class="nav-item active" data-view="clients">&#128100; Clients</div>
+      <div class="nav-item" data-view="leads">&#127775; Leads</div>
+      <div class="nav-item" data-view="all">&#9776; All records</div>
+      <div class="sidebar-footer">
+        <div class="sync-status">
+          <div class="sync-dot ok" id="syncDot"></div>
+          <span id="syncLabel">Synced to Drive</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div id="listView">
+        <div class="topbar">
+          <h2 id="listTitle">Clients</h2>
+          <div class="top-actions">
+            <input id="search" type="text" placeholder="Search..." style="width:180px;">
+            <select id="filterStatus" style="width:130px;">
+              <option value="">All statuses</option>
+              <option value="Lead">Lead</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Dormant">Dormant</option>
+            </select>
+            <button class="primary" id="addBtn">+ Add</button>
+            <button id="exportCsvBtn">Export CSV</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat-card"><div class="label">Total</div><div class="value" id="stat-total">0</div></div>
+          <div class="stat-card"><div class="label">Active</div><div class="value" id="stat-active">0</div></div>
+          <div class="stat-card"><div class="label">Leads</div><div class="value" id="stat-leads">0</div></div>
+          <div class="stat-card"><div class="label">Total deposits</div><div class="value" id="stat-deposits">$0</div></div>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Broker / Acct</th>
+                <th>Platform</th>
+                <th style="text-align:right;">Deposit</th>
+                <th>Status</th>
+                <th>Next follow-up</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="emptyState" style="display:none;">No records. Click "+ Add" to get started.</div>
+      </div>
+
+      <div id="detailView" style="display:none;">
+        <button id="backBtn">&larr; Back</button>
+        <div class="card" style="margin-top:1rem;">
+          <div class="detail-header">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div class="avatar" id="d-avatar"></div>
+              <div>
+                <p style="font-weight:600; font-size:16px;" id="d-name"></p>
+                <p style="font-size:13px; color:var(--text-secondary);" id="d-broker"></p>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button id="editBtn">Edit</button>
+              <button id="deleteDetailBtn" style="color:#a32d2d;">Delete</button>
+            </div>
+          </div>
+
+          <div class="tabs">
+            <div class="tab-item active" data-tab="overview">Overview</div>
+            <div class="tab-item" data-tab="comments">Comments <span id="commentCount" style="font-size:11px; color:var(--text-tertiary);"></span></div>
+          </div>
+
+          <div id="tab-overview">
+            <table class="info-table">
+              <tr><td>Phone</td><td id="d-phone"></td></tr>
+              <tr><td>Email</td><td id="d-email"></td></tr>
+              <tr><td>Country</td><td id="d-country"></td></tr>
+              <tr><td style="padding-top:12px; border-top:1px solid var(--border);">Account number</td><td style="padding-top:12px; border-top:1px solid var(--border);" id="d-account"></td></tr>
+              <tr><td>Account type</td><td id="d-accttype"></td></tr>
+              <tr><td>Platform</td><td id="d-platform"></td></tr>
+              <tr><td>Deposit (USD)</td><td id="d-deposit"></td></tr>
+              <tr><td>Status</td><td id="d-status"></td></tr>
+              <tr><td style="padding-top:12px; border-top:1px solid var(--border);">Source</td><td style="padding-top:12px; border-top:1px solid var(--border);" id="d-source"></td></tr>
+              <tr><td>Last contact</td><td id="d-lastcontact"></td></tr>
+              <tr><td>Next follow-up</td><td id="d-followup"></td></tr>
+            </table>
+            <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:12px;">
+              <p style="font-size:12px; color:var(--text-secondary); margin-bottom:4px;">Notes</p>
+              <p style="font-size:13px; line-height:1.6;" id="d-notes"></p>
+            </div>
+          </div>
+
+          <div id="tab-comments" style="display:none;">
+            <div style="display:flex; gap:8px; margin-bottom:1.25rem; align-items:flex-end;">
+              <textarea id="commentInput" placeholder="Log a call, WhatsApp message, or update..." style="flex:1; min-height:70px;"></textarea>
+              <button class="primary" id="addCommentBtn">Log</button>
+            </div>
+            <div id="commentsList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalWrap">
+  <div class="modal-box">
+    <h3 id="modalTitle">Add record</h3>
+    <div class="form-grid">
+      <div class="form-row"><label>Full name *</label><input id="f-name" type="text"></div>
+      <div class="form-row"><label>Phone / WhatsApp</label><input id="f-phone" type="text"></div>
+      <div class="form-row"><label>Email</label><input id="f-email" type="email"></div>
+      <div class="form-row"><label>Country</label><input id="f-country" type="text"></div>
+      <div class="form-row"><label>Broker</label><input id="f-broker" type="text" placeholder="RoboForex / RallyTrade / PuPrime"></div>
+      <div class="form-row"><label>Account number</label><input id="f-account" type="text"></div>
+      <div class="form-row"><label>Account type</label>
+        <select id="f-accttype">
+          <option value="">Select</option>
+          <option value="Live">Live</option>
+          <option value="Demo">Demo</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Trading platform</label><input id="f-platform" type="text" placeholder="MT4 / MT5"></div>
+      <div class="form-row"><label>Deposit amount (USD)</label><input id="f-deposit" type="number" min="0"></div>
+      <div class="form-row"><label>Status</label>
+        <select id="f-status">
+          <option value="Lead">Lead</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+          <option value="Dormant">Dormant</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Source</label><input id="f-source" type="text" placeholder="WhatsApp / YouTube / Referral..."></div>
+      <div class="form-row"><label>Last contact date</label><input id="f-lastcontact" type="date"></div>
+      <div class="form-row"><label>Next follow-up date</label><input id="f-followup" type="date"></div>
+      <div class="form-row"><label>Notes</label><textarea id="f-notes" style="min-height:70px;"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button id="cancelBtn">Cancel</button>
+      <button class="primary" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ─── CONFIGURATION ───────────────────────────────────────────────
+  const CLIENT_ID = '281995587244-mu3n068q8lfd82882tgdd8iika0fkjge.apps.googleusercontent.com';  // Replace with your Google OAuth Client ID
+  const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+  const FILE_NAME = 'julian_crm_data.json';
+  // ─────────────────────────────────────────────────────────────────
+
+  let accessToken = null;
+  let driveFileId = null;
+  let clients = [];
+  let editId = null;
+  let activeClientId = null;
+  let currentNavView = 'clients';
+  let saveTimeout = null;
+
+  // ── Auth ──
+  function initGSI() {
+    google.accounts.id.initialize({
+      client_id: CLIENT_ID,
+      callback: handleCredential,
+    });
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: (resp) => {
+        if (resp.error) { showAuthError(resp.error); return; }
+        accessToken = resp.access_token;
+        document.getElementById('authScreen').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
+        loadFromDrive();
+      }
+    });
+    document.getElementById('signInBtn').innerHTML =
+      '<button class="primary" style="height:42px; padding:0 24px; font-size:15px;" onclick="requestToken()">Sign in with Google</button>';
+    window._tokenClient = tokenClient;
+  }
+
+  function handleCredential(resp) { }
+  function requestToken() { window._tokenClient.requestAccessToken(); }
+
+  function signOut() {
+    if (!confirm('Sign out?')) return;
+    google.accounts.oauth2.revoke(accessToken, () => {
+      accessToken = null;
+      driveFileId = null;
+      clients = [];
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('authScreen').style.display = 'flex';
+    });
+  }
+
+  function showAuthError(msg) {
+    const el = document.getElementById('authError');
+    el.textContent = 'Error: ' + msg;
+    el.style.display = 'block';
+  }
+
+  function waitForGoogle(tries) {
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+      initGSI();
+    } else if (tries > 0) {
+      setTimeout(() => waitForGoogle(tries - 1), 300);
+    } else {
+      document.getElementById('authError').textContent = 'Could not load Google Sign-In. Please check your internet connection and refresh.';
+      document.getElementById('authError').style.display = 'block';
+    }
+  }
+  window.addEventListener('load', () => waitForGoogle(20));
+
+  // ── Drive helpers ──
+  function setSyncStatus(state, label) {
+    const dot = document.getElementById('syncDot');
+    dot.className = 'sync-dot ' + state;
+    document.getElementById('syncLabel').textContent = label;
+  }
+
+  async function loadFromDrive() {
+    setSyncStatus('saving', 'Loading from Drive...');
+    try {
+      const listResp = await fetch(
+        'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%22' + FILE_NAME + '%22&fields=files(id,name)',
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      const listData = await listResp.json();
+      if (listData.files && listData.files.length > 0) {
+        driveFileId = listData.files[0].id;
+        const fileResp = await fetch(
+          'https://www.googleapis.com/drive/v3/files/' + driveFileId + '?alt=media',
+          { headers: { Authorization: 'Bearer ' + accessToken } }
+        );
+        clients = await fileResp.json();
+      } else {
+        clients = [];
+        await createDriveFile();
+      }
+      setSyncStatus('ok', 'Synced to Drive');
+      render();
+      setUserDot();
+    } catch (e) {
+      setSyncStatus('error', 'Load failed');
+      showToast('Could not load from Drive: ' + e.message);
+    }
+  }
+
+  async function createDriveFile() {
+    const meta = JSON.stringify({ name: FILE_NAME, parents: ['appDataFolder'] });
+    const body = JSON.stringify(clients);
+    const form = new FormData();
+    form.append('metadata', new Blob([meta], { type: 'application/json' }));
+    form.append('file', new Blob([body], { type: 'application/json' }));
+    const resp = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+      { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken }, body: form }
+    );
+    const data = await resp.json();
+    driveFileId = data.id;
+  }
+
+  async function saveToDrive() {
+    setSyncStatus('saving', 'Saving...');
+    try {
+      const body = JSON.stringify(clients);
+      if (!driveFileId) { await createDriveFile(); return; }
+      await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=media',
+        { method: 'PATCH', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, body }
+      );
+      setSyncStatus('ok', 'Synced · ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (e) {
+      setSyncStatus('error', 'Sync failed');
+      showToast('Could not save to Drive');
+    }
+  }
+
+  function debouncedSave() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(saveToDrive, 800);
+  }
+
+  function setUserDot() {
+    document.getElementById('userDot').textContent = '\u{1F464}';
+  }
+
+  // ── UI helpers ──
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    return new Date(d + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function esc(str) {
+    return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ── Navigation ──
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      el.classList.add('active');
+      currentNavView = el.getAttribute('data-view');
+      document.getElementById('listTitle').textContent =
+        currentNavView === 'clients' ? 'Clients' : currentNavView === 'leads' ? 'Leads' : 'All records';
+      showListView();
+      render();
+    });
+  });
+
+  function showListView() {
+    document.getElementById('listView').style.display = 'block';
+    document.getElementById('detailView').style.display = 'none';
+    activeClientId = null;
+  }
+
+  // ── Render list ──
+  function render() {
+    const search = document.getElementById('search').value.toLowerCase();
+    const statusFilter = document.getElementById('filterStatus').value;
+
+    let scoped = clients;
+    if (currentNavView === 'clients') scoped = clients.filter(c => ['Active','Inactive','Dormant'].includes(c.status));
+    if (currentNavView === 'leads') scoped = clients.filter(c => c.status === 'Lead');
+
+    const filtered = scoped.filter(c => {
+      const matchSearch = c.name.toLowerCase().includes(search) || (c.broker||'').toLowerCase().includes(search);
+      const matchStatus = !statusFilter || c.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+
+    document.getElementById('stat-total').textContent = clients.length;
+    document.getElementById('stat-active').textContent = clients.filter(c => c.status === 'Active').length;
+    document.getElementById('stat-leads').textContent = clients.filter(c => c.status === 'Lead').length;
+    const totalDep = clients.reduce((s, c) => s + (parseFloat(c.deposit) || 0), 0);
+    document.getElementById('stat-deposits').textContent = '$' + totalDep.toLocaleString();
+
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    document.getElementById('emptyState').style.display = filtered.length === 0 ? 'block' : 'none';
+
+    filtered.forEach(c => {
+      const badgeClass = 'badge-' + c.status.toLowerCase();
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-weight:500;">${esc(c.name)}</td>
+        <td style="color:var(--text-secondary);">${esc(c.broker)||'—'}${c.account ? ' · ' + esc(c.account) : ''}</td>
+        <td style="color:var(--text-secondary);">${esc(c.platform)||'—'}</td>
+        <td style="text-align:right;">${c.deposit ? '$' + parseFloat(c.deposit).toLocaleString() : '—'}</td>
+        <td><span class="badge ${badgeClass}">${c.status}</span></td>
+        <td style="color:var(--text-secondary);">${fmtDate(c.followup)}</td>
+        <td style="text-align:right;">
+          <button class="icon-btn" data-del="${c.id}" title="Delete" style="color:#a32d2d;">&times;</button>
+        </td>
+      `;
+      tr.addEventListener('click', (e) => { if (e.target.closest('[data-del]')) return; openDetail(c.id); });
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-del]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete this record and all its comments? This cannot be undone.')) return;
+        clients = clients.filter(c => c.id !== btn.getAttribute('data-del'));
+        debouncedSave();
+        render();
+      });
+    });
+  }
+
+  // ── Detail view ──
+  function openDetail(id) {
+    activeClientId = id;
+    const c = clients.find(c => c.id === id);
+    document.getElementById('listView').style.display = 'none';
+    document.getElementById('detailView').style.display = 'block';
+    document.getElementById('d-avatar').textContent = c.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+    document.getElementById('d-name').textContent = c.name;
+    document.getElementById('d-broker').textContent = c.broker || 'No broker';
+    document.getElementById('d-phone').textContent = c.phone || '—';
+    document.getElementById('d-email').textContent = c.email || '—';
+    document.getElementById('d-country').textContent = c.country || '—';
+    document.getElementById('d-account').textContent = c.account || '—';
+    document.getElementById('d-accttype').textContent = c.accttype || '—';
+    document.getElementById('d-platform').textContent = c.platform || '—';
+    document.getElementById('d-deposit').textContent = c.deposit ? '$' + parseFloat(c.deposit).toLocaleString() : '—';
+    document.getElementById('d-status').textContent = c.status;
+    document.getElementById('d-source').textContent = c.source || '—';
+    document.getElementById('d-lastcontact').textContent = fmtDate(c.lastcontact);
+    document.getElementById('d-followup').textContent = fmtDate(c.followup);
+    document.getElementById('d-notes').textContent = c.notes || 'No notes';
+    switchTab('overview');
+    renderComments();
+  }
+
+  document.getElementById('backBtn').addEventListener('click', () => { showListView(); render(); });
+
+  document.getElementById('deleteDetailBtn').addEventListener('click', () => {
+    if (!confirm('Delete this record and all its comments?')) return;
+    clients = clients.filter(c => c.id !== activeClientId);
+    debouncedSave();
+    showListView();
+    render();
+  });
+
+  // ── Tabs ──
+  document.querySelectorAll('.tab-item').forEach(el => {
+    el.addEventListener('click', () => switchTab(el.getAttribute('data-tab')));
+  });
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === tab));
+    document.getElementById('tab-overview').style.display = tab === 'overview' ? 'block' : 'none';
+    document.getElementById('tab-comments').style.display = tab === 'comments' ? 'block' : 'none';
+  }
+
+  // ── Comments ──
+  function renderComments() {
+    const c = clients.find(c => c.id === activeClientId);
+    const comments = (c.comments || []);
+    document.getElementById('commentCount').textContent = comments.length ? '(' + comments.length + ')' : '';
+    const wrap = document.getElementById('commentsList');
+    wrap.innerHTML = '';
+    if (comments.length === 0) {
+      wrap.innerHTML = '<p class="empty-state" style="padding:1.5rem 0;">No conversations logged yet.</p>';
+      return;
+    }
+    comments.slice().reverse().forEach(cm => {
+      const date = new Date(cm.date);
+      const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ' · ' + date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      const item = document.createElement('div');
+      item.className = 'comment-item';
+      item.innerHTML = `<div class="comment-date">${dateStr}</div><div class="comment-text">${esc(cm.text)}</div>`;
+      wrap.appendChild(item);
+    });
+  }
+
+  document.getElementById('addCommentBtn').addEventListener('click', () => {
+    const text = document.getElementById('commentInput').value.trim();
+    if (!text) return;
+    const c = clients.find(c => c.id === activeClientId);
+    if (!c.comments) c.comments = [];
+    c.comments.push({ text, date: new Date().toISOString() });
+    document.getElementById('commentInput').value = '';
+    debouncedSave();
+    renderComments();
+    showToast('Comment logged');
+  });
+
+  // ── Modal ──
+  const formFields = ['name','phone','email','country','broker','account','platform','deposit','source','lastcontact','followup','notes'];
+
+  function openModal(id) {
+    editId = id || null;
+    document.getElementById('modalWrap').classList.add('open');
+    if (id) {
+      const c = clients.find(c => c.id === id);
+      document.getElementById('modalTitle').textContent = 'Edit record';
+      formFields.forEach(f => document.getElementById('f-' + f).value = c[f] || '');
+      document.getElementById('f-accttype').value = c.accttype || '';
+      document.getElementById('f-status').value = c.status;
+    } else {
+      document.getElementById('modalTitle').textContent = 'Add record';
+      formFields.forEach(f => document.getElementById('f-' + f).value = '');
+      document.getElementById('f-accttype').value = '';
+      document.getElementById('f-status').value = 'Lead';
+    }
+  }
+
+  document.getElementById('addBtn').addEventListener('click', () => openModal(null));
+  document.getElementById('editBtn').addEventListener('click', () => openModal(activeClientId));
+  document.getElementById('cancelBtn').addEventListener('click', () => document.getElementById('modalWrap').classList.remove('open'));
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { alert('Name is required.'); return; }
+    const data = {};
+    formFields.forEach(f => data[f] = document.getElementById('f-' + f).value.trim ? document.getElementById('f-' + f).value.trim() : document.getElementById('f-' + f).value);
+    data.accttype = document.getElementById('f-accttype').value;
+    data.status = document.getElementById('f-status').value;
+    if (editId) {
+      const c = clients.find(c => c.id === editId);
+      Object.assign(c, data);
+    } else {
+      clients.push({ id: 'c' + Date.now(), comments: [], ...data });
+    }
+    document.getElementById('modalWrap').classList.remove('open');
+    debouncedSave();
+    if (editId && activeClientId === editId) openDetail(editId); else render();
+    showToast(editId ? 'Record updated' : 'Record added');
+  });
+
+  document.getElementById('search').addEventListener('input', render);
+  document.getElementById('filterStatus').addEventListener('change', render);
+
+  // ── Export CSV ──
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    const headers = ['Name','Phone','Email','Country','Broker','Account','Account type','Platform','Deposit','Status','Source','Last contact','Next follow-up','Notes','Conversation log'];
+    const rows = clients.map(c => {
+      const log = (c.comments||[]).map(cm => new Date(cm.date).toLocaleDateString() + ': ' + cm.text).join(' | ');
+      return [c.name,c.phone,c.email,c.country,c.broker,c.account,c.accttype,c.platform,c.deposit,c.status,c.source,c.lastcontact,c.followup,(c.notes||''),(log)];
+    });
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'julian_crm_clients.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>
