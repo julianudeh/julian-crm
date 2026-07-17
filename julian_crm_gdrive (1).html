@@ -139,6 +139,48 @@ tbody tr:hover { background: var(--bg-secondary); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 1.25rem; }
 .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--text-primary); color: var(--bg-primary); padding: 10px 18px; border-radius: var(--radius); font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 200; }
 .toast.show { opacity: 1; }
+
+/* ── Tasks view ── */
+.task-group-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-tertiary); margin: 18px 0 8px; }
+.task-group-label:first-child { margin-top: 0; }
+.task-row { display: flex; align-items: center; gap: 12px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 8px; }
+.task-row.overdue { border-color: #e3b3b3; background: #fff8f8; }
+.task-checkbox { width: 19px; height: 19px; flex-shrink: 0; cursor: pointer; }
+.task-title { font-size: 14px; font-weight: 500; }
+.task-title.done { text-decoration: line-through; color: var(--text-tertiary); }
+.task-meta { font-size: 12px; color: var(--text-secondary); }
+.task-actions { margin-left: auto; display: flex; gap: 6px; }
+.task-actions button { height: 30px; padding: 0 10px; font-size: 12px; }
+
+/* ── Calendar view ── */
+.cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-dow { font-size: 11px; color: var(--text-tertiary); text-align: center; padding-bottom: 4px; text-transform: uppercase; }
+.cal-day { min-height: 76px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 6px; cursor: pointer; font-size: 12px; }
+.cal-day.empty { background: transparent; border: none; cursor: default; }
+.cal-day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cal-day.selected { background: var(--accent-bg); }
+.cal-day-num { font-weight: 600; margin-bottom: 3px; }
+.cal-dot-row { display: flex; flex-wrap: wrap; gap: 2px; }
+.cal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.cal-dot.overdue-dot { background: var(--danger); }
+.cal-agenda { margin-top: 1.25rem; }
+
+/* ── Alarm modal (rings until dismissed/snoozed) ── */
+#alarmOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); align-items: center; justify-content: center; z-index: 300; }
+#alarmOverlay.open { display: flex; }
+.alarm-box { background: var(--bg-primary); border-radius: var(--radius-lg); padding: 1.75rem; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.alarm-icon { font-size: 40px; margin-bottom: 10px; }
+.alarm-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.alarm-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 1.25rem; }
+.alarm-actions { display: flex; flex-direction: column; gap: 8px; }
+.alarm-actions button { height: 42px; font-size: 14px; }
+
+/* ── Notification permission nudge ── */
+#notifBanner { display: none; align-items: center; justify-content: space-between; gap: 12px; background: var(--accent-bg); color: var(--accent); font-size: 12.5px; font-weight: 600; padding: 9px 22px; }
+#notifBanner.show { display: flex; }
+#notifBanner button { height: 28px; padding: 0 12px; font-size: 11.5px; border-radius: 6px; border: 1px solid var(--accent); background: #fff; color: var(--accent); cursor: pointer; }
+
 @media (max-width: 700px) {
   .layout { flex-direction: column; }
   .sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; padding: 0.75rem 1rem; }
@@ -169,6 +211,10 @@ tbody tr:hover { background: var(--bg-secondary); }
       <button id="conflictKeepDrive">Use Google Drive's version</button>
     </div>
   </div>
+  <div id="notifBanner">
+    <span>Turn on browser notifications so call reminders alert you even if this tab isn't in focus.</span>
+    <button id="enableNotifBtn">Enable reminders</button>
+  </div>
 
   <div class="layout">
     <div class="sidebar">
@@ -180,6 +226,9 @@ tbody tr:hover { background: var(--bg-secondary); }
       <div class="nav-item active" data-view="clients">&#128100; Clients</div>
       <div class="nav-item" data-view="leads">&#127775; Leads</div>
       <div class="nav-item" data-view="all">&#9776; All records</div>
+      <p class="nav-label" style="margin-top:14px;">Follow-ups</p>
+      <div class="nav-item" data-view="tasks">&#9989; Tasks</div>
+      <div class="nav-item" data-view="calendar">&#128197; Calendar</div>
       <div class="sidebar-footer">
         <div class="sync-status">
           <div class="sync-dot ok" id="syncDot"></div>
@@ -270,6 +319,28 @@ tbody tr:hover { background: var(--bg-secondary); }
           </div>
         </div>
       </div>
+
+      <div id="tasksView" style="display:none;">
+        <div class="topbar">
+          <h2>Tasks</h2>
+          <div class="top-actions"><button class="primary" id="addTaskBtn">+ Add task</button></div>
+        </div>
+        <div id="tasksListWrap"></div>
+      </div>
+
+      <div id="calendarView" style="display:none;">
+        <div class="topbar"><h2>Calendar</h2></div>
+        <div class="card">
+          <div class="cal-header">
+            <button id="calPrevBtn">&larr;</button>
+            <div id="calMonthLabel" style="font-weight:700; font-size:15px;"></div>
+            <button id="calNextBtn">&rarr;</button>
+          </div>
+          <div class="cal-grid" id="calDowRow"></div>
+          <div class="cal-grid" id="calGrid" style="margin-top:6px;"></div>
+        </div>
+        <div class="cal-agenda" id="calAgenda"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -304,6 +375,38 @@ tbody tr:hover { background: var(--bg-secondary); }
   </div>
 </div>
 
+<div class="modal-overlay" id="taskModalWrap">
+  <div class="modal-box">
+    <h3 id="taskModalTitle">Add task</h3>
+    <div class="form-grid">
+      <div class="form-row"><label>What do you need to do? *</label><input id="t-title" type="text" placeholder="e.g. Call Ifeoma about KYC docs"></div>
+      <div class="form-row"><label>Link to a client (optional)</label>
+        <select id="t-client"><option value="">— No client —</option></select>
+      </div>
+      <div class="form-row"><label>Due date *</label><input id="t-date" type="date"></div>
+      <div class="form-row"><label>Due time *</label><input id="t-time" type="time" value="09:00"></div>
+      <div class="form-row"><label>Notes</label><textarea id="t-notes" style="min-height:60px;"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button id="taskCancelBtn">Cancel</button>
+      <button class="primary" id="taskSaveBtn">Save task</button>
+    </div>
+  </div>
+</div>
+
+<div id="alarmOverlay">
+  <div class="alarm-box">
+    <div class="alarm-icon">&#128276;</div>
+    <div class="alarm-title" id="alarmTitle">Call reminder</div>
+    <div class="alarm-sub" id="alarmSub"></div>
+    <div class="alarm-actions">
+      <button class="primary" id="alarmDoneBtn">Mark as done</button>
+      <button id="alarmSnoozeBtn">Snooze 10 minutes</button>
+      <button id="alarmDismissBtn">Dismiss for today</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -318,17 +421,23 @@ const TOKEN_REFRESH_MS = 45 * 60 * 1000; // NEW: silently refresh the Google tok
 let accessToken = null;
 let driveFileId = null;
 let clients = [];
+let tasks = []; // NEW: standalone to-do items, separate from client "next follow-up" reminders
 let editId = null;
 let activeClientId = null;
 let currentNavView = 'clients';
 let saveTimeout = null;
 let tokenRefreshInterval = null;
 let pendingSave = false; // NEW: tracks whether there are local changes not yet confirmed saved to Drive
+let alarmedKeys = new Set(); // NEW: tracks which reminders have already rung this session, so they don't repeat every check
+let alarmQueue = []; // NEW: items waiting to be shown in the alarm popup
+let calMonth = new Date().getMonth();
+let calYear = new Date().getFullYear();
+let calSelectedDate = null;
 
 // ── NEW: local backup helpers (this is the actual fix for "data only ever lived in memory") ──
 function saveLocalBackup() {
   try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify({ clients, savedAt: Date.now() }));
+    localStorage.setItem(LOCAL_KEY, JSON.stringify({ clients, tasks, savedAt: Date.now() }));
   } catch (e) { /* storage full or unavailable - Drive is still the primary copy */ }
 }
 function loadLocalBackup() {
@@ -352,6 +461,8 @@ function initGSI() {
       document.getElementById('app').style.display = 'flex';
       loadFromDrive();
       startTokenRefreshTimer(); // NEW
+      startAlarmEngine(); // NEW: begins checking for due tasks/follow-ups every 20s while this tab is open
+      maybeShowNotifBanner(); // NEW
     }
   });
   document.getElementById('signInBtn').innerHTML =
@@ -376,7 +487,9 @@ function signOut() {
     accessToken = null;
     driveFileId = null;
     clients = [];
+    tasks = [];
     clearInterval(tokenRefreshInterval);
+    clearInterval(alarmCheckInterval);
     document.getElementById('app').style.display = 'none';
     document.getElementById('authScreen').style.display = 'flex';
   });
@@ -417,41 +530,47 @@ async function loadFromDrive() {
       { headers: { Authorization: 'Bearer ' + accessToken } }
     );
     const listData = await listResp.json();
-    let driveClients;
+    let driveClients = [], driveTasks = [];
     if (listData.files && listData.files.length > 0) {
       driveFileId = listData.files[0].id;
       const fileResp = await fetch(
         'https://www.googleapis.com/drive/v3/files/' + driveFileId + '?alt=media',
         { headers: { Authorization: 'Bearer ' + accessToken } }
       );
-      driveClients = await fileResp.json();
-    } else {
-      driveClients = [];
+      const driveData = await fileResp.json();
+      // NEW: the file used to just be a raw array of clients (pre-Tasks/Calendar). Handle both shapes.
+      if (Array.isArray(driveData)) { driveClients = driveData; driveTasks = []; }
+      else { driveClients = driveData.clients || []; driveTasks = driveData.tasks || []; }
     }
 
     // NEW: before trusting Drive blindly, compare against this browser's own local backup.
     // This is the actual fix for the "12 became 6" bug — we no longer silently overwrite
     // a bigger/more-recent local copy with a smaller/older Drive copy.
     const local = loadLocalBackup();
-    if (local && Array.isArray(local.clients) && local.clients.length > driveClients.length) {
-      clients = driveClients; // show Drive's version for now, but ask before discarding local
-      showConflictBanner(local.clients, driveClients);
+    const localTotal = local ? (local.clients||[]).length + (local.tasks||[]).length : 0;
+    const driveTotal = driveClients.length + driveTasks.length;
+    if (local && localTotal > driveTotal) {
+      clients = driveClients; tasks = driveTasks; // show Drive's version for now, but ask before discarding local
+      showConflictBanner(local.clients||[], local.tasks||[], driveClients, driveTasks);
     } else {
-      clients = driveClients;
+      clients = driveClients; tasks = driveTasks;
       if (!listData.files || listData.files.length === 0) await createDriveFile();
     }
 
     setSyncStatus('ok', 'Synced to Drive');
     saveLocalBackup();
     render();
+    renderTasks();
+    renderCalendar();
     setUserDot();
+    checkAlarms();
   } catch (e) {
     // NEW: if Drive can't be reached at all, fall back to the local backup instead of an empty CRM
     const local = loadLocalBackup();
     if (local && Array.isArray(local.clients)) {
-      clients = local.clients;
+      clients = local.clients; tasks = local.tasks || [];
       setSyncStatus('error', "Couldn't reach Drive — showing this browser's saved copy");
-      render();
+      render(); renderTasks(); renderCalendar();
     } else {
       setSyncStatus('error', 'Load failed');
     }
@@ -460,31 +579,31 @@ async function loadFromDrive() {
 }
 
 // NEW: lets Julian pick which version to keep, instead of the app silently deciding for him
-function showConflictBanner(localClients, driveClients) {
+function showConflictBanner(localClients, localTasks, driveClients, driveTasks) {
   const banner = document.getElementById('conflictBanner');
   document.getElementById('conflictText').textContent =
-    `This browser has a saved copy with ${localClients.length} records, but Google Drive currently has ${driveClients.length}. ` +
+    `This browser has a saved copy with ${localClients.length} clients and ${localTasks.length} tasks, but Google Drive currently has ${driveClients.length} clients and ${driveTasks.length} tasks. ` +
     `This usually means some changes never made it to Drive. Which version do you want to keep?`;
   banner.classList.add('show');
   document.getElementById('conflictKeepLocal').onclick = () => {
-    clients = localClients;
+    clients = localClients; tasks = localTasks;
     banner.classList.remove('show');
     debouncedSave(true);
-    render();
+    render(); renderTasks(); renderCalendar();
     showToast('Kept this browser\'s version — syncing it to Drive now');
   };
   document.getElementById('conflictKeepDrive').onclick = () => {
-    clients = driveClients;
+    clients = driveClients; tasks = driveTasks;
     banner.classList.remove('show');
     saveLocalBackup();
-    render();
+    render(); renderTasks(); renderCalendar();
     showToast('Kept Google Drive\'s version');
   };
 }
 
 async function createDriveFile() {
   const meta = JSON.stringify({ name: FILE_NAME, parents: ['appDataFolder'] });
-  const body = JSON.stringify(clients);
+  const body = JSON.stringify({ clients, tasks });
   const form = new FormData();
   form.append('metadata', new Blob([meta], { type: 'application/json' }));
   form.append('file', new Blob([body], { type: 'application/json' }));
@@ -499,7 +618,7 @@ async function createDriveFile() {
 async function saveToDrive() {
   setSyncStatus('saving', 'Saving...');
   try {
-    const body = JSON.stringify(clients);
+    const body = JSON.stringify({ clients, tasks });
     if (!driveFileId) { await createDriveFile(); pendingSave = false; setSyncStatus('ok', 'Synced to Drive'); return; }
     const resp = await fetch(
       'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=media',
@@ -575,17 +694,27 @@ document.querySelectorAll('.nav-item').forEach(el => {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
     currentNavView = el.getAttribute('data-view');
+    if (currentNavView === 'tasks') { showTasksView(); renderTasks(); return; }
+    if (currentNavView === 'calendar') { showCalendarView(); renderCalendar(); return; }
     document.getElementById('listTitle').textContent =
       currentNavView === 'clients' ? 'Clients' : currentNavView === 'leads' ? 'Leads' : 'All records';
     showListView();
     render();
   });
 });
-function showListView() {
-  document.getElementById('listView').style.display = 'block';
+function hideAllViews() {
+  document.getElementById('listView').style.display = 'none';
   document.getElementById('detailView').style.display = 'none';
+  document.getElementById('tasksView').style.display = 'none';
+  document.getElementById('calendarView').style.display = 'none';
+}
+function showListView() {
+  hideAllViews();
+  document.getElementById('listView').style.display = 'block';
   activeClientId = null;
 }
+function showTasksView() { hideAllViews(); document.getElementById('tasksView').style.display = 'block'; }
+function showCalendarView() { hideAllViews(); document.getElementById('calendarView').style.display = 'block'; }
 
 // ── Render list ──
 function render() {
@@ -769,6 +898,304 @@ document.getElementById('exportCsvBtn').addEventListener('click', () => {
   a.href = url; a.download = 'julian_crm_clients.csv'; a.click();
   URL.revokeObjectURL(url);
 });
+
+/* ══════════════════════════════════════════════════════════════
+   TASKS, CALENDAR & CALL-REMINDER ALARM
+   ══════════════════════════════════════════════════════════════ */
+
+// ── helpers to build a unified list of "reminders": manual tasks + auto client follow-ups ──
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function dismissedFollowupsMap() {
+  try { return JSON.parse(localStorage.getItem('julian_crm_dismissed_followups') || '{}'); } catch(e) { return {}; }
+}
+function saveDismissedFollowups(map) { localStorage.setItem('julian_crm_dismissed_followups', JSON.stringify(map)); }
+function isFollowupDismissedToday(clientId, followupDate) {
+  const map = dismissedFollowupsMap();
+  return map[clientId] === followupDate; // dismissed specifically for that follow-up date
+}
+function dismissFollowupToday(clientId, followupDate) {
+  const map = dismissedFollowupsMap();
+  map[clientId] = followupDate;
+  saveDismissedFollowups(map);
+}
+
+// Builds a single combined array: { key, kind:'task'|'followup', title, sub, dueAt(ms), refId, done }
+function getAllReminders() {
+  const items = [];
+  tasks.forEach(t => {
+    if (t.done) return;
+    const c = t.clientId ? clients.find(c => c.id === t.clientId) : null;
+    items.push({
+      key: 'task_' + t.id,
+      kind: 'task',
+      title: t.title,
+      sub: c ? c.name : (t.notes || ''),
+      dueAt: new Date(t.date + 'T' + (t.time || '09:00')).getTime(),
+      refId: t.id
+    });
+  });
+  clients.forEach(c => {
+    if (!c.followup) return;
+    if (isFollowupDismissedToday(c.id, c.followup)) return;
+    items.push({
+      key: 'followup_' + c.id + '_' + c.followup,
+      kind: 'followup',
+      title: 'Call ' + c.name,
+      sub: (c.broker ? c.broker + ' · ' : '') + 'Follow-up you scheduled',
+      dueAt: new Date(c.followup + 'T09:00').getTime(), // client follow-ups only store a date, so we treat 9:00 AM as the daily check time
+      refId: c.id,
+      followupDate: c.followup
+    });
+  });
+  return items.sort((a,b) => a.dueAt - b.dueAt);
+}
+
+// ── Tasks view ──
+function renderTasks() {
+  const wrap = document.getElementById('tasksListWrap');
+  const all = getAllReminders();
+  const now = Date.now();
+  const doneTasks = tasks.filter(t => t.done);
+
+  let html = '';
+  html += renderTaskGroup('Overdue', all.filter(i => i.dueAt < now && new Date(i.dueAt).toDateString() !== new Date().toDateString()), true);
+  html += renderTaskGroup('Today', all.filter(i => new Date(i.dueAt).toDateString() === new Date().toDateString()), false);
+  html += renderTaskGroup('Upcoming', all.filter(i => i.dueAt > now && new Date(i.dueAt).toDateString() !== new Date().toDateString()), false);
+  if (doneTasks.length) {
+    html += `<div class="task-group-label">Completed</div>`;
+    doneTasks.slice().reverse().forEach(t => {
+      html += `<div class="task-row"><input type="checkbox" class="task-checkbox" checked onchange="toggleTaskDone('${t.id}')"><div><div class="task-title done">${esc(t.title)}</div><div class="task-meta">${fmtDate(t.date)}</div></div>
+        <div class="task-actions"><button onclick="deleteTask('${t.id}')" style="color:#a32d2d;">Delete</button></div></div>`;
+    });
+  }
+  if (!all.length && !doneTasks.length) html = '<div class="empty-state">No tasks or follow-ups yet. Click "+ Add task", or set a "Next follow-up" date on a client.</div>';
+  wrap.innerHTML = html;
+}
+function renderTaskGroup(label, items, isOverdue) {
+  if (!items.length) return '';
+  let html = `<div class="task-group-label">${label} (${items.length})</div>`;
+  items.forEach(i => {
+    const timeStr = new Date(i.dueAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    html += `<div class="task-row ${isOverdue ? 'overdue' : ''}">
+      <input type="checkbox" class="task-checkbox" onchange="${i.kind==='task' ? `toggleTaskDone('${i.refId}')` : `dismissFollowupFromList('${i.refId}','${i.followupDate}')`}">
+      <div><div class="task-title">${esc(i.title)}</div><div class="task-meta">${timeStr}${i.sub ? ' · ' + esc(i.sub) : ''}</div></div>
+      <div class="task-actions">
+        ${i.kind==='task' ? `<button onclick="openTaskModal('${i.refId}')">Edit</button><button onclick="deleteTask('${i.refId}')" style="color:#a32d2d;">Delete</button>`
+                          : `<button onclick="openDetail('${i.refId}')">View client</button>`}
+      </div>
+    </div>`;
+  });
+  return html;
+}
+function toggleTaskDone(id) {
+  const t = tasks.find(t => t.id === id);
+  if (t) { t.done = !t.done; debouncedSave(); renderTasks(); renderCalendar(); }
+}
+window.toggleTaskDone = toggleTaskDone;
+function dismissFollowupFromList(clientId, followupDate) {
+  dismissFollowupToday(clientId, followupDate);
+  renderTasks(); renderCalendar();
+  showToast('Marked done for today — it\'ll reappear if you set a new follow-up date');
+}
+window.dismissFollowupFromList = dismissFollowupFromList;
+function deleteTask(id) {
+  if (!confirm('Delete this task?')) return;
+  tasks = tasks.filter(t => t.id !== id);
+  debouncedSave(); renderTasks(); renderCalendar();
+}
+window.deleteTask = deleteTask;
+
+document.getElementById('addTaskBtn').addEventListener('click', () => openTaskModal(null));
+function openTaskModal(id) {
+  const wrap = document.getElementById('taskModalWrap');
+  const sel = document.getElementById('t-client');
+  sel.innerHTML = '<option value="">— No client —</option>' + clients.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  wrap._editId = id || null;
+  if (id) {
+    const t = tasks.find(t => t.id === id);
+    document.getElementById('taskModalTitle').textContent = 'Edit task';
+    document.getElementById('t-title').value = t.title;
+    sel.value = t.clientId || '';
+    document.getElementById('t-date').value = t.date;
+    document.getElementById('t-time').value = t.time || '09:00';
+    document.getElementById('t-notes').value = t.notes || '';
+  } else {
+    document.getElementById('taskModalTitle').textContent = 'Add task';
+    document.getElementById('t-title').value = '';
+    sel.value = '';
+    document.getElementById('t-date').value = todayStr();
+    document.getElementById('t-time').value = '09:00';
+    document.getElementById('t-notes').value = '';
+  }
+  wrap.classList.add('open');
+}
+window.openTaskModal = openTaskModal;
+document.getElementById('taskCancelBtn').addEventListener('click', () => document.getElementById('taskModalWrap').classList.remove('open'));
+document.getElementById('taskSaveBtn').addEventListener('click', () => {
+  const title = document.getElementById('t-title').value.trim();
+  const date = document.getElementById('t-date').value;
+  if (!title || !date) { alert('A title and due date are required.'); return; }
+  const data = {
+    title, date,
+    time: document.getElementById('t-time').value || '09:00',
+    clientId: document.getElementById('t-client').value || null,
+    notes: document.getElementById('t-notes').value.trim()
+  };
+  const wrap = document.getElementById('taskModalWrap');
+  if (wrap._editId) {
+    Object.assign(tasks.find(t => t.id === wrap._editId), data);
+  } else {
+    tasks.push({ id: 'task' + Date.now() + Math.random().toString(36).slice(2,7), done:false, ...data });
+  }
+  wrap.classList.remove('open');
+  debouncedSave();
+  renderTasks(); renderCalendar();
+  showToast(wrap._editId ? 'Task updated' : 'Task added');
+});
+
+// ── Calendar view ──
+document.getElementById('calPrevBtn').addEventListener('click', () => { calMonth--; if (calMonth<0){calMonth=11; calYear--;} renderCalendar(); });
+document.getElementById('calNextBtn').addEventListener('click', () => { calMonth++; if (calMonth>11){calMonth=0; calYear++;} renderCalendar(); });
+function renderCalendar() {
+  const dowRow = document.getElementById('calDowRow');
+  dowRow.innerHTML = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="cal-dow">${d}</div>`).join('');
+  document.getElementById('calMonthLabel').textContent = new Date(calYear, calMonth, 1).toLocaleString(undefined, { month:'long', year:'numeric' });
+
+  const all = getAllReminders();
+  const byDay = {}; // 'YYYY-M-D' -> {count, overdue}
+  all.forEach(i => {
+    const d = new Date(i.dueAt);
+    const key = d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
+    if (!byDay[key]) byDay[key] = { count:0, overdue:false };
+    byDay[key].count++;
+    if (i.dueAt < Date.now()) byDay[key].overdue = true;
+  });
+
+  const first = new Date(calYear, calMonth, 1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const grid = document.getElementById('calGrid');
+  let html = '';
+  for (let i=0; i<startOffset; i++) html += `<div class="cal-day empty"></div>`;
+  const today = new Date();
+  for (let d=1; d<=daysInMonth; d++) {
+    const key = calYear+'-'+calMonth+'-'+d;
+    const info = byDay[key];
+    const isToday = today.getFullYear()===calYear && today.getMonth()===calMonth && today.getDate()===d;
+    const isSelected = calSelectedDate === key;
+    html += `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''}" onclick="selectCalDay(${d})">
+      <div class="cal-day-num">${d}</div>
+      ${info ? `<div class="cal-dot-row">${Array.from({length:Math.min(info.count,4)}).map(()=>`<div class="cal-dot ${info.overdue?'overdue-dot':''}"></div>`).join('')}</div>` : ''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+  renderCalAgenda(all);
+}
+function selectCalDay(d) {
+  calSelectedDate = calYear+'-'+calMonth+'-'+d;
+  renderCalendar();
+}
+window.selectCalDay = selectCalDay;
+function renderCalAgenda(all) {
+  const agenda = document.getElementById('calAgenda');
+  if (!calSelectedDate) { agenda.innerHTML = '<p style="color:var(--text-secondary); font-size:13px;">Click a day to see what\'s due.</p>'; return; }
+  const items = all.filter(i => { const d = new Date(i.dueAt); return (d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate()) === calSelectedDate; });
+  const [y,m,d] = calSelectedDate.split('-').map(Number);
+  const label = new Date(y,m,d).toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
+  let html = `<div class="task-group-label" style="margin-top:0;">${label}</div>`;
+  if (!items.length) html += '<div class="empty-state" style="padding:1.5rem 0;">Nothing due this day.</div>';
+  items.forEach(i => {
+    const timeStr = new Date(i.dueAt).toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
+    html += `<div class="task-row"><div style="width:19px;"></div><div><div class="task-title">${esc(i.title)}</div><div class="task-meta">${timeStr}${i.sub ? ' · ' + esc(i.sub) : ''}</div></div>
+      <div class="task-actions">${i.kind==='task' ? `<button onclick="openTaskModal('${i.refId}')">Edit</button>` : `<button onclick="openDetail('${i.refId}')">View client</button>`}</div></div>`;
+  });
+  agenda.innerHTML = html;
+}
+
+// ── Alarm engine ──
+// IMPORTANT LIMITATION: this can only ring while this browser tab is open (even in the background is fine).
+// If the browser itself is fully closed or the computer is off, nothing can alert you — that would need
+// a phone app or a server behind it, which this static, no-backend CRM doesn't have.
+let alarmCheckInterval = null;
+let alarmActiveQueue = [];
+
+function startAlarmEngine() {
+  clearInterval(alarmCheckInterval);
+  checkAlarms();
+  alarmCheckInterval = setInterval(checkAlarms, 20000); // check every 20 seconds
+}
+function checkAlarms() {
+  const now = Date.now();
+  const due = getAllReminders().filter(i => i.dueAt <= now && !alarmedKeys.has(i.key));
+  due.forEach(i => { alarmedKeys.add(i.key); alarmActiveQueue.push(i); });
+  if (due.length) playAlarmSound();
+  if (!document.getElementById('alarmOverlay').classList.contains('open') && alarmActiveQueue.length) showNextAlarm();
+}
+function showNextAlarm() {
+  if (!alarmActiveQueue.length) { document.getElementById('alarmOverlay').classList.remove('open'); return; }
+  const item = alarmActiveQueue[0];
+  document.getElementById('alarmTitle').textContent = item.title;
+  document.getElementById('alarmSub').textContent = new Date(item.dueAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + (item.sub ? ' · ' + item.sub : '');
+  document.getElementById('alarmOverlay').classList.add('open');
+  fireBrowserNotification(item);
+}
+function resolveActiveAlarm(action) {
+  const item = alarmActiveQueue.shift();
+  if (item) {
+    if (action === 'done') {
+      if (item.kind === 'task') { const t = tasks.find(t=>t.id===item.refId); if (t) t.done = true; debouncedSave(); renderTasks(); }
+      else { dismissFollowupToday(item.refId, item.followupDate); }
+    } else if (action === 'dismiss') {
+      if (item.kind === 'followup') dismissFollowupToday(item.refId, item.followupDate);
+      else alarmedKeys.add(item.key); // manual task: just stop re-alerting today, it stays on the list
+    } else if (action === 'snooze') {
+      // stop it from re-ringing for 10 minutes, then allow it to trigger again on the next check
+      alarmedKeys.add(item.key);
+      setTimeout(() => { alarmedKeys.delete(item.key); checkAlarms(); }, 10*60*1000);
+    }
+  }
+  renderCalendar();
+  showNextAlarm();
+}
+document.getElementById('alarmDoneBtn').addEventListener('click', () => resolveActiveAlarm('done'));
+document.getElementById('alarmSnoozeBtn').addEventListener('click', () => resolveActiveAlarm('snooze'));
+document.getElementById('alarmDismissBtn').addEventListener('click', () => resolveActiveAlarm('dismiss'));
+
+// simple 3-beep alert using the Web Audio API — no external sound file needed
+function playAlarmSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.35, 0.7].forEach(delay => {
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = 880;
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.3);
+    });
+  } catch (e) { /* audio not available */ }
+}
+function fireBrowserNotification(item) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try { new Notification(item.title, { body: item.sub || 'Due now — open Julian\'s CRM' }); } catch(e) {}
+}
+
+// ── Notification permission nudge ──
+function maybeShowNotifBanner() {
+  const banner = document.getElementById('notifBanner');
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'default' && !localStorage.getItem('julian_crm_notif_dismissed')) banner.classList.add('show');
+}
+document.getElementById('enableNotifBtn').addEventListener('click', () => {
+  if (typeof Notification !== 'undefined') Notification.requestPermission().then(()=>{});
+  localStorage.setItem('julian_crm_notif_dismissed', '1');
+  document.getElementById('notifBanner').classList.remove('show');
+});
+
 </script>
 </body>
 </html>
