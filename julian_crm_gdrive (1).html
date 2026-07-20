@@ -115,6 +115,9 @@ tbody tr:hover { background: var(--bg-secondary); }
 .badge-active { background: var(--success-bg); color: var(--success); }
 .badge-lead { background: var(--warning-bg); color: var(--warning); }
 .badge-inactive, .badge-dormant { background: var(--bg-tertiary); color: var(--text-secondary); }
+.badge-weak { background: #fbe9e9; color: #a32d2d; }
+.badge-strong { background: #eaf3de; color: #3b6d11; }
+.badge-promising { background: #e6f1fb; color: #185fa5; }
 .empty-state { text-align: center; padding: 3rem 0; color: var(--text-secondary); }
 .card { background: var(--bg-primary); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
 .detail-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 1rem; }
@@ -247,6 +250,9 @@ tbody tr:hover { background: var(--bg-secondary); }
               <option value="">All statuses</option>
               <option value="Lead">Lead</option>
               <option value="Active">Active</option>
+              <option value="Strong">Strong</option>
+              <option value="Promising">Promising</option>
+              <option value="Weak">Weak</option>
               <option value="Inactive">Inactive</option>
               <option value="Dormant">Dormant</option>
             </select>
@@ -361,7 +367,7 @@ tbody tr:hover { background: var(--bg-secondary); }
       <div class="form-row"><label>Trading platform</label><input id="f-platform" type="text" placeholder="MT4 / MT5"></div>
       <div class="form-row"><label>Deposit amount (USD)</label><input id="f-deposit" type="number" min="0"></div>
       <div class="form-row"><label>Status</label>
-        <select id="f-status"><option value="Lead">Lead</option><option value="Active">Active</option><option value="Inactive">Inactive</option><option value="Dormant">Dormant</option></select>
+        <select id="f-status"><option value="Lead">Lead</option><option value="Active">Active</option><option value="Strong">Strong</option><option value="Promising">Promising</option><option value="Weak">Weak</option><option value="Inactive">Inactive</option><option value="Dormant">Dormant</option></select>
       </div>
       <div class="form-row"><label>Source</label><input id="f-source" type="text" placeholder="WhatsApp / YouTube / Referral..."></div>
       <div class="form-row"><label>Last contact date</label><input id="f-lastcontact" type="date"></div>
@@ -721,7 +727,7 @@ function render() {
   const search = document.getElementById('search').value.toLowerCase();
   const statusFilter = document.getElementById('filterStatus').value;
   let scoped = clients;
-  if (currentNavView === 'clients') scoped = clients.filter(c => ['Active','Inactive','Dormant'].includes(c.status));
+  if (currentNavView === 'clients') scoped = clients.filter(c => ['Active','Inactive','Dormant','Weak','Promising','Strong'].includes(c.status));
   if (currentNavView === 'leads') scoped = clients.filter(c => c.status === 'Lead');
   const filtered = scoped.filter(c => {
     const matchSearch = c.name.toLowerCase().includes(search) || (c.broker||'').toLowerCase().includes(search);
