@@ -269,7 +269,7 @@ tbody tr:hover { background: var(--bg-secondary); }
         <div style="overflow-x:auto;">
           <table>
             <thead>
-              <tr><th>Name</th><th>Broker / Acct</th><th>Platform</th><th style="text-align:right;">Deposit</th><th>Status</th><th>Next follow-up</th><th></th></tr>
+              <tr><th>Name</th><th>Broker / Acct</th><th>Platform</th><th style="text-align:right;">Deposit</th><th>Status</th><th>Last contacted</th><th>Next follow-up</th><th></th></tr>
             </thead>
             <tbody id="tableBody"></tbody>
           </table>
@@ -753,6 +753,7 @@ function render() {
       <td style="color:var(--text-secondary);">${esc(c.platform)||'—'}</td>
       <td style="text-align:right;">${c.deposit ? '$' + parseFloat(c.deposit).toLocaleString() : '—'}</td>
       <td><span class="badge ${badgeClass}">${c.status}</span></td>
+      <td style="color:var(--text-secondary);">${fmtDate(c.lastcontact)}</td>
       <td style="color:var(--text-secondary);">${fmtDate(c.followup)}</td>
       <td style="text-align:right;"><button class="icon-btn" data-del="${c.id}" title="Delete" style="color:#a32d2d;">&times;</button></td>
     `;
