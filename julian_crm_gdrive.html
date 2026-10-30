@@ -190,6 +190,23 @@ tbody tr:hover { background: var(--bg-secondary); }
   .sidebar-top { padding: 0; }
   .main { padding: 1rem; }
 }
+.pager { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; font-size:13px; color:var(--text-secondary); flex-wrap:wrap; }
+.pager .pager-btns { display:flex; gap:6px; align-items:center; }
+.pager button { height:32px; padding:0 12px; }
+.pager button:disabled { opacity:.4; cursor:default; }
+.modal-box.wide { max-width:760px; }
+.imp-note { font-size:13px; color:var(--text-secondary); margin:6px 0 10px; line-height:1.5; }
+.imp-map { display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius); padding:10px; margin-bottom:12px; }
+.imp-row { display:grid; grid-template-columns:200px 1fr 1fr; gap:10px; align-items:center; }
+.imp-label { font-size:13px; }
+.imp-sample { font-size:12px; color:var(--text-tertiary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.imp-check { display:flex; gap:8px; align-items:flex-start; font-size:13px; margin:8px 0; }
+.imp-check input { margin-top:3px; }
+.imp-summary { background:var(--bg-secondary); border-radius:var(--radius); padding:12px; font-size:13px; margin-top:12px; line-height:1.6; }
+.imp-preview { width:100%; font-size:12px; margin-top:8px; border-collapse:collapse; }
+.imp-preview th, .imp-preview td { padding:4px 6px; border-bottom:1px solid var(--border); text-align:left; background:transparent; }
+.imp-undo { background:var(--warning-bg); color:var(--warning); padding:10px 12px; border-radius:var(--radius); font-size:13px; margin-top:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+@media (max-width:700px) { .imp-row { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -256,7 +273,20 @@ tbody tr:hover { background: var(--bg-secondary); }
               <option value="Inactive">Inactive</option>
               <option value="Dormant">Dormant</option>
             </select>
+            <select id="filterContact" style="width:190px;">
+              <option value="">Contacted: All</option>
+              <option value="contacted">Contacted</option>
+              <option value="not">Not contacted yet</option>
+            </select>
+            <select id="sortBy" style="width:190px;">
+              <option value="">Sort: Default</option>
+              <option value="lastcontact">Last contacted (newest first)</option>
+              <option value="lastcontact_old">Last contacted (oldest first)</option>
+              <option value="followup">Next follow-up (soonest first)</option>
+              <option value="name">Name A to Z</option>
+            </select>
             <button class="primary" id="addBtn">+ Add</button>
+            <button id="importBtn">Import Excel/CSV</button>
             <button id="exportCsvBtn">Export CSV</button>
           </div>
         </div>
@@ -275,6 +305,7 @@ tbody tr:hover { background: var(--bg-secondary); }
           </table>
         </div>
         <div class="empty-state" id="emptyState" style="display:none;">No records. Click "+ Add" to get started.</div>
+        <div class="pager" id="pager"></div>
       </div>
 
       <div id="detailView" style="display:none;">
@@ -372,6 +403,7 @@ tbody tr:hover { background: var(--bg-secondary); }
       <div class="form-row"><label>Source</label><input id="f-source" type="text" placeholder="WhatsApp / YouTube / Referral..."></div>
       <div class="form-row"><label>Last contact date</label><input id="f-lastcontact" type="date"></div>
       <div class="form-row"><label>Next follow-up date</label><input id="f-followup" type="date"></div>
+      <div class="form-row"><label>Next follow-up time</label><input id="f-followuptime" type="time" value="09:00"></div>
       <div class="form-row"><label>Notes</label><textarea id="f-notes" style="min-height:70px;"></textarea></div>
     </div>
     <div class="modal-actions">
@@ -413,6 +445,37 @@ tbody tr:hover { background: var(--bg-secondary); }
   </div>
 </div>
 
+<div class="modal-overlay" id="importModalWrap">
+  <div class="modal-box wide">
+    <h3>Import contacts from Excel / CSV</h3>
+    <div id="importStep1">
+      <p class="imp-note">Choose your Excel (.xlsx, .xls) or CSV file. The first row must be the column headings. Nothing is added until you click the Import button.</p>
+      <input type="file" id="importFile" accept=".xlsx,.xls,.csv">
+      <p id="importLoadMsg" class="imp-note"></p>
+      <div id="importUndoWrap"></div>
+    </div>
+    <div id="importStep2" style="display:none;">
+      <div class="form-row" id="importSheetRow" style="display:none;"><label>Sheet</label><select id="importSheet"></select></div>
+      <p class="imp-note"><b id="importRowCount"></b> Check that each CRM field points to the right column of your sheet.</p>
+      <div class="imp-map" id="importMap"></div>
+      <div class="two-col">
+        <div class="form-row"><label>Status for contacts with no valid status</label>
+          <select id="impDefStatus"><option>Lead</option><option>Active</option><option>Strong</option><option>Promising</option><option>Weak</option><option>Inactive</option><option>Dormant</option></select>
+        </div>
+        <div class="form-row"><label>Country when blank</label><input id="impDefCountry" type="text" value="Nigeria"></div>
+      </div>
+      <div class="form-row"><label>Source when blank</label><input id="impDefSource" type="text" placeholder="e.g. My Leads"></div>
+      <label class="imp-check"><input type="checkbox" id="impSkipDupes" checked> Skip contacts already in the CRM (same phone number or email)</label>
+      <label class="imp-check"><input type="checkbox" id="impFixZero" checked> Put back the missing leading 0 on 10-digit Nigerian numbers (Excel removes it)</label>
+      <div class="imp-summary" id="importSummary"></div>
+    </div>
+    <div class="modal-actions">
+      <button id="importCancelBtn">Close</button>
+      <button class="primary" id="importGoBtn" style="display:none;">Import</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -444,7 +507,10 @@ let calSelectedDate = null;
 function saveLocalBackup() {
   try {
     localStorage.setItem(LOCAL_KEY, JSON.stringify({ clients, tasks, savedAt: Date.now() }));
-  } catch (e) { /* storage full or unavailable - Drive is still the primary copy */ }
+  } catch (e) {
+    // storage full or unavailable - Drive is still the primary copy, but say so instead of failing silently
+    if (!window._localBackupWarned) { window._localBackupWarned = true; showToast("This browser's backup copy is full, so only Google Drive is saving. Use Export CSV now and then."); }
+  }
 }
 function loadLocalBackup() {
   try {
@@ -690,6 +756,15 @@ function fmtDate(d) {
   if (!d) return '—';
   return new Date(d + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
+// date plus optional time, e.g. "Jul 28, 2026, 3:30 PM"
+function fmtDateTime(d, t) {
+  if (!d) return '—';
+  const base = fmtDate(d);
+  if (!t) return base;
+  const parts = t.split(':').map(Number);
+  if (isNaN(parts[0]) || isNaN(parts[1])) return base;
+  return base + ', ' + new Date(2000, 0, 1, parts[0], parts[1]).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
 function esc(str) {
   return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
@@ -700,6 +775,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
     currentNavView = el.getAttribute('data-view');
+    listPage = 0;
     if (currentNavView === 'tasks') { showTasksView(); renderTasks(); return; }
     if (currentNavView === 'calendar') { showCalendarView(); renderCalendar(); return; }
     document.getElementById('listTitle').textContent =
@@ -723,17 +799,43 @@ function showTasksView() { hideAllViews(); document.getElementById('tasksView').
 function showCalendarView() { hideAllViews(); document.getElementById('calendarView').style.display = 'block'; }
 
 // ── Render list ──
+// "Contacted" = a last-contact date is set OR at least one comment has been logged
+function isContacted(c) { return !!c.lastcontact || !!(c.comments && c.comments.length); }
+const PAGE_SIZE = 50;
+let listPage = 0;
+function goPage(delta) { listPage += delta; render(); window.scrollTo(0, 0); }
 function render() {
   const search = document.getElementById('search').value.toLowerCase();
   const statusFilter = document.getElementById('filterStatus').value;
   let scoped = clients;
   if (currentNavView === 'clients') scoped = clients.filter(c => ['Active','Inactive','Dormant','Weak','Promising','Strong'].includes(c.status));
   if (currentNavView === 'leads') scoped = clients.filter(c => c.status === 'Lead');
+  const contactFilter = document.getElementById('filterContact').value;
+  let nContacted = 0;
+  scoped.forEach(c => { if (isContacted(c)) nContacted++; });
+  const cf = document.getElementById('filterContact').options;
+  cf[0].textContent = 'Contacted: All (' + scoped.length.toLocaleString() + ')';
+  cf[1].textContent = 'Contacted (' + nContacted.toLocaleString() + ')';
+  cf[2].textContent = 'Not contacted yet (' + (scoped.length - nContacted).toLocaleString() + ')';
   const filtered = scoped.filter(c => {
-    const matchSearch = c.name.toLowerCase().includes(search) || (c.broker||'').toLowerCase().includes(search);
+    if (contactFilter === 'contacted' && !isContacted(c)) return false;
+    if (contactFilter === 'not' && isContacted(c)) return false;
+    const matchSearch = !search || (c.name + ' ' + (c.broker||'') + ' ' + (c.phone||'') + ' ' + (c.email||'') + ' ' + (c.account||'')).toLowerCase().includes(search);
     const matchStatus = !statusFilter || c.status === statusFilter;
     return matchSearch && matchStatus;
   });
+  const sortBy = document.getElementById('sortBy').value;
+  if (sortBy) {
+    const emptyLast = (a, b, dir) => (!a && !b) ? 0 : !a ? 1 : !b ? -1 : (a < b ? -dir : a > b ? dir : 0);
+    if (sortBy === 'lastcontact') filtered.sort((a, b) => emptyLast(a.lastcontact, b.lastcontact, -1));
+    else if (sortBy === 'lastcontact_old') filtered.sort((a, b) => emptyLast(a.lastcontact, b.lastcontact, 1));
+    else if (sortBy === 'followup') filtered.sort((a, b) => emptyLast(a.followup ? a.followup + (a.followuptime||'') : '', b.followup ? b.followup + (b.followuptime||'') : '', 1));
+    else if (sortBy === 'name') filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (listPage >= pages) listPage = pages - 1;
+  if (listPage < 0) listPage = 0;
+  const pageItems = filtered.slice(listPage * PAGE_SIZE, (listPage + 1) * PAGE_SIZE);
   document.getElementById('stat-total').textContent = clients.length;
   document.getElementById('stat-active').textContent = clients.filter(c => c.status === 'Active').length;
   document.getElementById('stat-leads').textContent = clients.filter(c => c.status === 'Lead').length;
@@ -743,8 +845,18 @@ function render() {
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = '';
   document.getElementById('emptyState').style.display = filtered.length === 0 ? 'block' : 'none';
+  const pager = document.getElementById('pager');
+  if (filtered.length <= PAGE_SIZE) {
+    pager.innerHTML = filtered.length ? `<div>Showing all ${filtered.length}</div>` : '';
+  } else {
+    const from = listPage * PAGE_SIZE + 1, to = Math.min(filtered.length, (listPage + 1) * PAGE_SIZE);
+    pager.innerHTML = `<div>Showing ${from}-${to} of ${filtered.length.toLocaleString()}</div>
+      <div class="pager-btns"><button onclick="goPage(-1)" ${listPage === 0 ? 'disabled' : ''}>&larr; Previous</button>
+      <span>Page ${listPage + 1} of ${pages}</span>
+      <button onclick="goPage(1)" ${listPage >= pages - 1 ? 'disabled' : ''}>Next &rarr;</button></div>`;
+  }
 
-  filtered.forEach(c => {
+  pageItems.forEach(c => {
     const badgeClass = 'badge-' + c.status.toLowerCase();
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -754,7 +866,7 @@ function render() {
       <td style="text-align:right;">${c.deposit ? '$' + parseFloat(c.deposit).toLocaleString() : '—'}</td>
       <td><span class="badge ${badgeClass}">${c.status}</span></td>
       <td style="color:var(--text-secondary);">${fmtDate(c.lastcontact)}</td>
-      <td style="color:var(--text-secondary);">${fmtDate(c.followup)}</td>
+      <td style="color:var(--text-secondary);">${fmtDateTime(c.followup, c.followuptime)}</td>
       <td style="text-align:right;"><button class="icon-btn" data-del="${c.id}" title="Delete" style="color:#a32d2d;">&times;</button></td>
     `;
     tr.addEventListener('click', (e) => { if (e.target.closest('[data-del]')) return; openDetail(c.id); });
@@ -790,7 +902,7 @@ function openDetail(id) {
   document.getElementById('d-status').textContent = c.status;
   document.getElementById('d-source').textContent = c.source || '—';
   document.getElementById('d-lastcontact').textContent = fmtDate(c.lastcontact);
-  document.getElementById('d-followup').textContent = fmtDate(c.followup);
+  document.getElementById('d-followup').textContent = fmtDateTime(c.followup, c.followuptime);
   document.getElementById('d-notes').textContent = c.notes || 'No notes';
   switchTab('overview');
   renderComments();
@@ -841,14 +953,16 @@ document.getElementById('addCommentBtn').addEventListener('click', () => {
   const c = clients.find(c => c.id === activeClientId);
   if (!c.comments) c.comments = [];
   c.comments.push({ text, date: new Date().toISOString() });
+  c.lastcontact = todayStr(); // logging a conversation counts as contacting them today
+  document.getElementById('d-lastcontact').textContent = fmtDate(c.lastcontact);
   document.getElementById('commentInput').value = '';
   debouncedSave();
   renderComments();
-  showToast('Comment logged');
+  showToast('Comment logged. Last contact set to today.');
 });
 
 // ── Modal ──
-const formFields = ['name','phone','email','country','broker','account','platform','deposit','source','lastcontact','followup','notes'];
+const formFields = ['name','phone','email','country','broker','account','platform','deposit','source','lastcontact','followup','followuptime','notes'];
 function openModal(id) {
   editId = id || null;
   document.getElementById('modalWrap').classList.add('open');
@@ -856,11 +970,13 @@ function openModal(id) {
     const c = clients.find(c => c.id === id);
     document.getElementById('modalTitle').textContent = 'Edit record';
     formFields.forEach(f => document.getElementById('f-' + f).value = c[f] || '');
+    if (!c.followuptime) document.getElementById('f-followuptime').value = '09:00';
     document.getElementById('f-accttype').value = c.accttype || '';
     document.getElementById('f-status').value = c.status;
   } else {
     document.getElementById('modalTitle').textContent = 'Add record';
     formFields.forEach(f => document.getElementById('f-' + f).value = '');
+    document.getElementById('f-followuptime').value = '09:00';
     document.getElementById('f-accttype').value = '';
     document.getElementById('f-status').value = 'Lead';
   }
@@ -881,22 +997,24 @@ document.getElementById('saveBtn').addEventListener('click', () => {
   } else {
     // NEW: Date.now() alone could collide if two records are ever created in the same millisecond;
     // adding a random suffix makes every id unique regardless.
-    clients.push({ id: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), comments: [], ...data });
+    clients.unshift({ id: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), comments: [], ...data });
   }
   document.getElementById('modalWrap').classList.remove('open');
   debouncedSave();
   if (editId && activeClientId === editId) openDetail(editId); else render();
   showToast(editId ? 'Record updated' : 'Record added');
 });
-document.getElementById('search').addEventListener('input', render);
-document.getElementById('filterStatus').addEventListener('change', render);
+document.getElementById('search').addEventListener('input', () => { listPage = 0; render(); });
+document.getElementById('filterStatus').addEventListener('change', () => { listPage = 0; render(); });
+document.getElementById('sortBy').addEventListener('change', () => { listPage = 0; render(); });
+document.getElementById('filterContact').addEventListener('change', () => { listPage = 0; render(); });
 
 // ── Export CSV ──
 document.getElementById('exportCsvBtn').addEventListener('click', () => {
-  const headers = ['Name','Phone','Email','Country','Broker','Account','Account type','Platform','Deposit','Status','Source','Last contact','Next follow-up','Notes','Conversation log'];
+  const headers = ['Name','Phone','Email','Country','Broker','Account','Account type','Platform','Deposit','Status','Source','Last contact','Next follow-up','Next follow-up time','Notes','Conversation log'];
   const rows = clients.map(c => {
     const log = (c.comments||[]).map(cm => new Date(cm.date).toLocaleDateString() + ': ' + cm.text).join(' | ');
-    return [c.name,c.phone,c.email,c.country,c.broker,c.account,c.accttype,c.platform,c.deposit,c.status,c.source,c.lastcontact,c.followup,(c.notes||''),(log)];
+    return [c.name,c.phone,c.email,c.country,c.broker,c.account,c.accttype,c.platform,c.deposit,c.status,c.source,c.lastcontact,c.followup,c.followuptime,(c.notes||''),(log)];
   });
   const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -944,17 +1062,20 @@ function getAllReminders() {
       refId: t.id
     });
   });
+  const dismissed = dismissedFollowupsMap(); // read once, not once per client (matters with thousands of contacts)
   clients.forEach(c => {
     if (!c.followup) return;
-    if (isFollowupDismissedToday(c.id, c.followup)) return;
+    const fuTime = c.followuptime || '09:00';
+    const fuKey = c.followup + 'T' + fuTime;
+    if (dismissed[c.id] === fuKey || dismissed[c.id] === c.followup) return;
     items.push({
-      key: 'followup_' + c.id + '_' + c.followup,
+      key: 'followup_' + c.id + '_' + fuKey,
       kind: 'followup',
       title: 'Call ' + c.name,
       sub: (c.broker ? c.broker + ' · ' : '') + 'Follow-up you scheduled',
-      dueAt: new Date(c.followup + 'T09:00').getTime(), // client follow-ups only store a date, so we treat 9:00 AM as the daily check time
+      dueAt: new Date(fuKey).getTime(),
       refId: c.id,
-      followupDate: c.followup
+      followupDate: fuKey
     });
   });
   return items.sort((a,b) => a.dueAt - b.dueAt);
@@ -968,7 +1089,7 @@ function renderTasks() {
   const doneTasks = tasks.filter(t => t.done);
 
   let html = '';
-  html += renderTaskGroup('Overdue', all.filter(i => i.dueAt < now && new Date(i.dueAt).toDateString() !== new Date().toDateString()), true);
+  html += renderTaskGroup('Overdue', all.filter(i => i.dueAt < now && new Date(i.dueAt).toDateString() !== new Date().toDateString()).sort((a,b) => b.dueAt - a.dueAt), true);
   html += renderTaskGroup('Today', all.filter(i => new Date(i.dueAt).toDateString() === new Date().toDateString()), false);
   html += renderTaskGroup('Upcoming', all.filter(i => i.dueAt > now && new Date(i.dueAt).toDateString() !== new Date().toDateString()), false);
   if (doneTasks.length) {
@@ -984,7 +1105,8 @@ function renderTasks() {
 function renderTaskGroup(label, items, isOverdue) {
   if (!items.length) return '';
   let html = `<div class="task-group-label">${label} (${items.length})</div>`;
-  items.forEach(i => {
+  const MAX_ROWS = 100;
+  items.slice(0, MAX_ROWS).forEach(i => {
     const timeStr = new Date(i.dueAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
     html += `<div class="task-row ${isOverdue ? 'overdue' : ''}">
       <input type="checkbox" class="task-checkbox" onchange="${i.kind==='task' ? `toggleTaskDone('${i.refId}')` : `dismissFollowupFromList('${i.refId}','${i.followupDate}')`}">
@@ -995,6 +1117,7 @@ function renderTaskGroup(label, items, isOverdue) {
       </div>
     </div>`;
   });
+  if (items.length > MAX_ROWS) html += `<p class="imp-note">Showing the first ${MAX_ROWS} of ${items.length}. Finish or reschedule these to see the rest.</p>`;
   return html;
 }
 function toggleTaskDone(id) {
@@ -1136,21 +1259,38 @@ function startAlarmEngine() {
 }
 function checkAlarms() {
   const now = Date.now();
-  const due = getAllReminders().filter(i => i.dueAt <= now && !alarmedKeys.has(i.key));
-  due.forEach(i => { alarmedKeys.add(i.key); alarmActiveQueue.push(i); });
-  if (due.length) playAlarmSound();
+  // only ring for things that fell due in the last 7 days; older overdue items stay visible in the Tasks list
+  const due = getAllReminders().filter(i => i.dueAt <= now && i.dueAt >= now - 7*86400000 && !alarmedKeys.has(i.key));
+  if (!due.length) return;
+  due.forEach(i => alarmedKeys.add(i.key));
+  if (due.length > 5) {
+    // many at once (for example after a long break): one summary alarm instead of a flood of popups
+    alarmActiveQueue.push({ key:'summary_' + now, kind:'summary', title: due.length + ' follow-ups are due or overdue', sub:'Open Tasks to see who to call first', dueAt: now });
+  } else {
+    due.forEach(i => alarmActiveQueue.push(i));
+  }
+  playAlarmSound();
   if (!document.getElementById('alarmOverlay').classList.contains('open') && alarmActiveQueue.length) showNextAlarm();
 }
 function showNextAlarm() {
   if (!alarmActiveQueue.length) { document.getElementById('alarmOverlay').classList.remove('open'); return; }
   const item = alarmActiveQueue[0];
+  const isSummary = item.kind === 'summary';
+  document.getElementById('alarmDoneBtn').textContent = isSummary ? 'Open Tasks' : 'Mark as done';
+  document.getElementById('alarmSnoozeBtn').style.display = isSummary ? 'none' : '';
+  document.getElementById('alarmDismissBtn').textContent = isSummary ? 'Close' : 'Dismiss for today';
   document.getElementById('alarmTitle').textContent = item.title;
-  document.getElementById('alarmSub').textContent = new Date(item.dueAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + (item.sub ? ' · ' + item.sub : '');
+  document.getElementById('alarmSub').textContent = isSummary ? item.sub : new Date(item.dueAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + (item.sub ? ' · ' + item.sub : '');
   document.getElementById('alarmOverlay').classList.add('open');
   fireBrowserNotification(item);
 }
 function resolveActiveAlarm(action) {
   const item = alarmActiveQueue.shift();
+  if (item && item.kind === 'summary') {
+    if (action === 'done') document.querySelector('.nav-item[data-view="tasks"]').click();
+    showNextAlarm();
+    return;
+  }
   if (item) {
     if (action === 'done') {
       if (item.kind === 'task') { const t = tasks.find(t=>t.id===item.refId); if (t) t.done = true; debouncedSave(); renderTasks(); }
@@ -1202,6 +1342,307 @@ document.getElementById('enableNotifBtn').addEventListener('click', () => {
   localStorage.setItem('julian_crm_notif_dismissed', '1');
   document.getElementById('notifBanner').classList.remove('show');
 });
+
+
+/* ══════════════════════════════════════════════════════════════
+   IMPORT CONTACTS FROM EXCEL / CSV
+   ══════════════════════════════════════════════════════════════ */
+const LAST_IMPORT_KEY = 'julian_crm_last_import';
+const VALID_STATUSES = ['Lead','Active','Strong','Promising','Weak','Inactive','Dormant'];
+const IMPORT_FIELDS = [
+  { key:'name',         label:'Full name',                  alias:['name','fullname','clientname','customername','contactname','client','customer','contact'] },
+  { key:'firstname',    label:'First name (if no full name)', alias:['firstname','givenname','forename'] },
+  { key:'lastname',     label:'Last name (if no full name)',  alias:['lastname','surname','familyname'] },
+  { key:'phone',        label:'Phone / WhatsApp',           alias:['phone','phonenumber','mobile','mobilenumber','whatsapp','whatsappnumber','tel','telephone','contactnumber','phoneno','mobileno','gsm'] },
+  { key:'email',        label:'Email',                      alias:['email','emailaddress','mail','emailid'] },
+  { key:'country',      label:'Country',                    alias:['country','nationality'] },
+  { key:'broker',       label:'Broker',                     alias:['broker','brokername'] },
+  { key:'account',      label:'Account number',             alias:['account','accountnumber','accountno','acct','acctno','login','accountid','mt5login','mt4login'] },
+  { key:'accttype',     label:'Account type (Live / Demo)', alias:['accounttype','accttype'] },
+  { key:'platform',     label:'Trading platform',           alias:['platform','tradingplatform'] },
+  { key:'deposit',      label:'Deposit amount (USD)',       alias:['deposit','depositamount','totaldeposit','depositusd'] },
+  { key:'status',       label:'Status',                     alias:['status','clientstatus','leadstatus'] },
+  { key:'source',       label:'Source',                     alias:['source','leadsource','channel'] },
+  { key:'lastcontact',  label:'Last contact date',          alias:['lastcontact','lastcontacted','lastcontactdate','lastcalled','lastcall'] },
+  { key:'followup',     label:'Next follow-up date',        alias:['nextfollowup','followup','followupdate','nextfollowupdate','nextcall','nextcalldate'] },
+  { key:'followuptime', label:'Next follow-up time',        alias:['nextfollowuptime','followuptime','nextcalltime'] },
+  { key:'notes',        label:'Notes',                      alias:['notes','note','comments','comment','remark','remarks'] },
+];
+let importState = null;
+let sheetJsPromise = null;
+
+function loadSheetJS() {
+  if (window.XLSX) return Promise.resolve();
+  if (sheetJsPromise) return sheetJsPromise;
+  sheetJsPromise = new Promise((resolve, reject) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload = resolve;
+    sc.onerror = () => { sheetJsPromise = null; reject(new Error('Could not load the Excel reader. Check your internet connection and try again.')); };
+    document.head.appendChild(sc);
+  });
+  return sheetJsPromise;
+}
+
+// ── cell cleaning helpers ──
+function cellStr(v) {
+  if (v === null || v === undefined) return '';
+  if (v instanceof Date) return isNaN(v) ? '' : toISODate(v);
+  if (typeof v === 'number') return Number.isInteger(v) ? v.toFixed(0) : String(v);
+  return String(v).trim();
+}
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toISODate(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (v instanceof Date) {
+    if (isNaN(v)) return '';
+    if (v.getUTCHours() === 0 && v.getUTCMinutes() === 0 && v.getUTCSeconds() === 0) {
+      return v.getUTCFullYear() + '-' + pad2(v.getUTCMonth() + 1) + '-' + pad2(v.getUTCDate());
+    }
+    const d = new Date(v.getTime() + 12 * 3600 * 1000); // nudge so local-midnight dates never fall on the wrong day
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+  if (typeof v === 'number') {
+    if (v > 20000 && v < 80000) { // Excel serial date
+      const d = new Date(Math.round((v - 25569) * 86400000));
+      return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+    }
+    return '';
+  }
+  const str = String(v).trim();
+  let m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]);
+  m = str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if (m) {
+    let day = Number(m[1]), month = Number(m[2]), year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+    if (month > 12 && day <= 12) { const t = day; day = month; month = t; } // day-first is the default (Nigeria); swap only if impossible
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return year + '-' + pad2(month) + '-' + pad2(day);
+  }
+  const d = new Date(str);
+  if (!isNaN(d)) return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  return '';
+}
+function toHHMM(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (v instanceof Date) {
+    if (isNaN(v)) return '';
+    const r = new Date(Math.round(v.getTime() / 60000) * 60000);
+    return pad2(r.getHours()) + ':' + pad2(r.getMinutes());
+  }
+  if (typeof v === 'number') {
+    if (v >= 0 && v < 1) { const mins = Math.round(v * 1440); return pad2(Math.floor(mins / 60) % 24) + ':' + pad2(mins % 60); }
+    return '';
+  }
+  const m = String(v).match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+  if (!m) return '';
+  let h = Number(m[1]); const mi = Number(m[2]);
+  if (m[3]) { const pm = m[3].toLowerCase() === 'pm'; if (pm && h < 12) h += 12; if (!pm && h === 12) h = 0; }
+  if (h > 23 || mi > 59) return '';
+  return pad2(h) + ':' + pad2(mi);
+}
+function cleanPhone(v, fixZero) {
+  let str = cellStr(v);
+  if (!str) return '';
+  str = str.replace(/\.0+$/, '');
+  const compact = str.replace(/[\s\-().]/g, '');
+  if (fixZero && /^[789]\d{9}$/.test(compact)) return '0' + compact;
+  return str;
+}
+function phoneKey(p) {
+  const digits = String(p || '').replace(/\D/g, '');
+  return digits.length >= 7 ? digits.slice(-10) : '';
+}
+
+// ── open / close ──
+function openImportModal() {
+  importState = null;
+  document.getElementById('importFile').value = '';
+  document.getElementById('importLoadMsg').textContent = '';
+  document.getElementById('importStep2').style.display = 'none';
+  document.getElementById('importGoBtn').style.display = 'none';
+  renderImportUndo();
+  document.getElementById('importModalWrap').classList.add('open');
+  loadSheetJS().catch(() => {}); // start loading the Excel reader in the background
+}
+function closeImportModal() { document.getElementById('importModalWrap').classList.remove('open'); }
+document.getElementById('importBtn').addEventListener('click', openImportModal);
+document.getElementById('importCancelBtn').addEventListener('click', closeImportModal);
+
+// ── read the file ──
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const msg = document.getElementById('importLoadMsg');
+  msg.textContent = 'Reading file...';
+  try {
+    await loadSheetJS();
+    await processImportBuffer(await file.arrayBuffer(), /\.(csv|txt)$/i.test(file.name));
+    msg.textContent = '';
+  } catch (err) {
+    msg.textContent = 'Could not read that file: ' + err.message;
+  }
+});
+// CSV files are read as plain text: otherwise the reader guesses US month-first dates (05/07/2026 would become 7 May)
+async function processImportBuffer(buf, isCsv) {
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true, raw: !!isCsv });
+  if (!wb.SheetNames.length) throw new Error('The file has no sheets.');
+  importState = { wb, headers: [], rows: [], mapping: {} };
+  const sel = document.getElementById('importSheet');
+  sel.innerHTML = wb.SheetNames.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('');
+  document.getElementById('importSheetRow').style.display = wb.SheetNames.length > 1 ? 'block' : 'none';
+  loadImportSheet(0);
+}
+document.getElementById('importSheet').addEventListener('change', (e) => loadImportSheet(Number(e.target.value)));
+
+function loadImportSheet(idx) {
+  const ws = importState.wb.Sheets[importState.wb.SheetNames[idx]];
+  const all = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: false });
+  if (all.length < 2) throw new Error('That sheet needs a heading row and at least one contact.');
+  let width = 0;
+  all.forEach(r => { if (r.length > width) width = r.length; });
+  const headers = [];
+  for (let i = 0; i < width; i++) headers.push(String(all[0][i] === undefined ? '' : all[0][i]).trim() || ('Column ' + (i + 1)));
+  const norm = t => String(t).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const used = new Set(), mapping = {};
+  IMPORT_FIELDS.forEach(f => {
+    const at = headers.findIndex((h, i) => !used.has(i) && f.alias.includes(norm(h)));
+    mapping[f.key] = at;
+    if (at >= 0) used.add(at);
+  });
+  importState.headers = headers;
+  importState.rows = all.slice(1);
+  importState.mapping = mapping;
+  document.getElementById('importRowCount').textContent = importState.rows.length.toLocaleString() + ' rows found.';
+  renderImportMap();
+  document.getElementById('importStep2').style.display = 'block';
+  document.getElementById('importGoBtn').style.display = 'inline-flex';
+  updateImportSummary();
+}
+function renderImportMap() {
+  const { headers, mapping } = importState;
+  document.getElementById('importMap').innerHTML = IMPORT_FIELDS.map(f => {
+    const opts = ['<option value="-1">— don\'t import —</option>']
+      .concat(headers.map((h, i) => `<option value="${i}" ${mapping[f.key] === i ? 'selected' : ''}>${esc(h)}</option>`)).join('');
+    return `<div class="imp-row"><div class="imp-label">${f.label}</div><select data-field="${f.key}">${opts}</select><div class="imp-sample" id="imps_${f.key}"></div></div>`;
+  }).join('');
+  document.querySelectorAll('#importMap select').forEach(sel => {
+    sel.addEventListener('change', () => { importState.mapping[sel.dataset.field] = Number(sel.value); updateImportSamples(); updateImportSummary(); });
+  });
+  updateImportSamples();
+}
+function updateImportSamples() {
+  IMPORT_FIELDS.forEach(f => {
+    const col = importState.mapping[f.key];
+    let sample = '';
+    if (col >= 0) {
+      for (let i = 0; i < Math.min(importState.rows.length, 200); i++) { const v = cellStr(importState.rows[i][col]); if (v) { sample = v; break; } }
+    }
+    document.getElementById('imps_' + f.key).textContent = sample ? 'e.g. ' + sample : '';
+  });
+}
+['impDefStatus','impDefCountry','impDefSource','impSkipDupes','impFixZero'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', () => { if (importState) updateImportSummary(); });
+});
+
+// ── turn sheet rows into CRM records ──
+function buildImportPlan() {
+  const m = importState.mapping;
+  const defStatus = document.getElementById('impDefStatus').value;
+  const defCountry = document.getElementById('impDefCountry').value.trim();
+  const defSource = document.getElementById('impDefSource').value.trim();
+  const skipDupes = document.getElementById('impSkipDupes').checked;
+  const fixZero = document.getElementById('impFixZero').checked;
+  const seenPhone = new Set(), seenEmail = new Set();
+  clients.forEach(c => {
+    const pk = phoneKey(c.phone); if (pk) seenPhone.add(pk);
+    if (c.email) seenEmail.add(String(c.email).toLowerCase());
+  });
+  const batch = 'i' + Date.now().toString(36);
+  const stamp = Date.now().toString(36);
+  const get = (row, key) => m[key] >= 0 ? row[m[key]] : '';
+  const plan = { records: [], dupes: 0, blank: 0, batch };
+  importState.rows.forEach((row, idx) => {
+    const country = cellStr(get(row, 'country')) || defCountry;
+    const phone = cleanPhone(get(row, 'phone'), fixZero && /^nigeria$/i.test(country));
+    const email = cellStr(get(row, 'email')).toLowerCase();
+    let name = cellStr(get(row, 'name'));
+    if (!name) name = (cellStr(get(row, 'firstname')) + ' ' + cellStr(get(row, 'lastname'))).trim();
+    if (!name) name = email || phone;
+    if (!name) { plan.blank++; return; }
+    const pk = phoneKey(phone);
+    if (skipDupes && ((pk && seenPhone.has(pk)) || (email && seenEmail.has(email)))) { plan.dupes++; return; }
+    if (pk) seenPhone.add(pk);
+    if (email) seenEmail.add(email);
+    const statusRaw = cellStr(get(row, 'status')).toLowerCase();
+    const status = VALID_STATUSES.find(x => x.toLowerCase() === statusRaw) || defStatus;
+    const typeRaw = cellStr(get(row, 'accttype')).toLowerCase();
+    const depositNum = parseFloat(cellStr(get(row, 'deposit')).replace(/[^0-9.\-]/g, ''));
+    const followup = toISODate(get(row, 'followup'));
+    const rec = { id: 'c' + stamp + idx.toString(36), name, status, importBatch: batch };
+    const put = (k, v) => { if (v) rec[k] = v; };
+    put('phone', phone); put('email', email); put('country', country);
+    put('broker', cellStr(get(row, 'broker'))); put('account', cellStr(get(row, 'account')));
+    put('accttype', typeRaw.startsWith('live') ? 'Live' : typeRaw.startsWith('demo') ? 'Demo' : '');
+    put('platform', cellStr(get(row, 'platform')));
+    put('deposit', depositNum > 0 ? String(depositNum) : '');
+    put('source', cellStr(get(row, 'source')) || defSource);
+    put('lastcontact', toISODate(get(row, 'lastcontact')));
+    put('followup', followup);
+    if (followup) rec.followuptime = toHHMM(get(row, 'followuptime')) || '09:00';
+    put('notes', cellStr(get(row, 'notes')));
+    plan.records.push(rec);
+  });
+  return plan;
+}
+function updateImportSummary() {
+  const plan = buildImportPlan();
+  const box = document.getElementById('importSummary');
+  const preview = plan.records.slice(0, 5).map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.phone || '')}</td><td>${esc(r.email || '')}</td><td>${esc(r.status)}</td><td>${esc(r.lastcontact || '')}</td><td>${esc(r.followup || '')}</td></tr>`).join('');
+  box.innerHTML = `<b>${plan.records.length.toLocaleString()}</b> contacts will be imported.<br>
+    ${plan.dupes ? plan.dupes.toLocaleString() + ' skipped as duplicates. ' : ''}${plan.blank ? plan.blank.toLocaleString() + ' empty rows skipped.' : ''}
+    ${plan.records.length ? `<table class="imp-preview"><thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Status</th><th>Last contact</th><th>Follow-up</th></tr></thead><tbody>${preview}</tbody></table>
+    <div class="imp-note" style="margin-bottom:0;">Preview of the first 5. Dates show as year-month-day. If anything looks wrong, change the column choices above.</div>` : ''}`;
+  const go = document.getElementById('importGoBtn');
+  go.disabled = !plan.records.length;
+  go.textContent = plan.records.length ? 'Import ' + plan.records.length.toLocaleString() + ' contacts' : 'Nothing to import';
+}
+document.getElementById('importGoBtn').addEventListener('click', () => {
+  if (!importState) return;
+  const plan = buildImportPlan();
+  if (!plan.records.length) return;
+  clients = clients.concat(plan.records);
+  try { localStorage.setItem(LAST_IMPORT_KEY, JSON.stringify({ batch: plan.batch, count: plan.records.length, at: Date.now() })); } catch (e) {}
+  debouncedSave(true);
+  closeImportModal();
+  document.querySelector('.nav-item[data-view="all"]').click();
+  showToast(plan.records.length.toLocaleString() + ' contacts imported' + (plan.dupes ? ', ' + plan.dupes.toLocaleString() + ' duplicates skipped' : ''));
+});
+
+// ── undo ──
+function renderImportUndo() {
+  const wrap = document.getElementById('importUndoWrap');
+  let last = null;
+  try { last = JSON.parse(localStorage.getItem(LAST_IMPORT_KEY)); } catch (e) {}
+  const n = last ? clients.filter(c => c.importBatch === last.batch).length : 0;
+  wrap.innerHTML = n ? `<div class="imp-undo"><span>Last import: ${n.toLocaleString()} contacts (${new Date(last.at).toLocaleString()}).</span><button id="importUndoBtn">Undo last import</button></div>` : '';
+  if (n) document.getElementById('importUndoBtn').onclick = undoLastImport;
+}
+function undoLastImport() {
+  let last = null;
+  try { last = JSON.parse(localStorage.getItem(LAST_IMPORT_KEY)); } catch (e) {}
+  if (!last) return;
+  const fromBatch = clients.filter(c => c.importBatch === last.batch);
+  const removable = fromBatch.filter(c => !(c.comments && c.comments.length));
+  const kept = fromBatch.length - removable.length;
+  if (!confirm('Remove ' + removable.length.toLocaleString() + ' contacts added by the last import?' + (kept ? ' ' + kept + ' that you already added comments to will be kept.' : ''))) return;
+  clients = clients.filter(c => !(c.importBatch === last.batch && !(c.comments && c.comments.length)));
+  debouncedSave(true);
+  render();
+  renderImportUndo();
+  showToast(removable.length.toLocaleString() + ' imported contacts removed');
+}
 
 </script>
 </body>
