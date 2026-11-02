@@ -207,6 +207,17 @@ tbody tr:hover { background: var(--bg-secondary); }
 .imp-preview th, .imp-preview td { padding:4px 6px; border-bottom:1px solid var(--border); text-align:left; background:transparent; }
 .imp-undo { background:var(--warning-bg); color:var(--warning); padding:10px 12px; border-radius:var(--radius); font-size:13px; margin-top:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
 @media (max-width:700px) { .imp-row { grid-template-columns:1fr; } }
+.contact-actions { display:flex; gap:4px; align-items:center; }
+.cbtn { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-width:30px; height:30px; padding:0 8px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-primary); color:var(--text-primary); text-decoration:none; font-size:13px; cursor:pointer; white-space:nowrap; }
+.cbtn:hover { background:var(--bg-tertiary); }
+.cbtn.call { color:var(--success); border-color:#c9dfb0; }
+.cbtn.wa { color:#1a7f4b; border-color:#b8dfc9; }
+.cbtn.mail { color:var(--accent); border-color:#b5d4f0; }
+.cbtn.off { opacity:.3; cursor:default; pointer-events:none; }
+.detail-contact { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 1rem 0; }
+.detail-contact .cbtn { height:36px; padding:0 14px; font-size:14px; }
+.alarm-contact { display:flex; gap:8px; justify-content:center; margin-bottom:1rem; }
+.alarm-contact .cbtn { height:40px; padding:0 14px; font-size:14px; }
 </style>
 </head>
 <body>
@@ -299,7 +310,7 @@ tbody tr:hover { background: var(--bg-secondary); }
         <div style="overflow-x:auto;">
           <table>
             <thead>
-              <tr><th>Name</th><th>Broker / Acct</th><th>Platform</th><th style="text-align:right;">Deposit</th><th>Status</th><th>Last contacted</th><th>Next follow-up</th><th></th></tr>
+              <tr><th>Name</th><th>Broker / Acct</th><th>Platform</th><th style="text-align:right;">Deposit</th><th>Status</th><th>Last contacted</th><th>Next follow-up</th><th>Reach out</th><th></th></tr>
             </thead>
             <tbody id="tableBody"></tbody>
           </table>
@@ -324,6 +335,7 @@ tbody tr:hover { background: var(--bg-secondary); }
               <button id="deleteDetailBtn" style="color:#a32d2d;">Delete</button>
             </div>
           </div>
+          <div class="detail-contact" id="d-contact"></div>
           <div class="tabs">
             <div class="tab-item active" data-tab="overview">Overview</div>
             <div class="tab-item" data-tab="comments">Comments <span id="commentCount" style="font-size:11px; color:var(--text-tertiary);"></span></div>
@@ -437,6 +449,7 @@ tbody tr:hover { background: var(--bg-secondary); }
     <div class="alarm-icon">&#128276;</div>
     <div class="alarm-title" id="alarmTitle">Call reminder</div>
     <div class="alarm-sub" id="alarmSub"></div>
+    <div class="alarm-contact" id="alarmContact"></div>
     <div class="alarm-actions">
       <button class="primary" id="alarmDoneBtn">Mark as done</button>
       <button id="alarmSnoozeBtn">Snooze 10 minutes</button>
@@ -798,6 +811,47 @@ function showListView() {
 function showTasksView() { hideAllViews(); document.getElementById('tasksView').style.display = 'block'; }
 function showCalendarView() { hideAllViews(); document.getElementById('calendarView').style.display = 'block'; }
 
+// ── Call / WhatsApp / email links ──
+const DIAL_CODES = { 'nigeria':'234', 'ghana':'233', 'kenya':'254', 'south africa':'27', 'uk':'44', 'united kingdom':'44',
+  'usa':'1', 'united states':'1', 'canada':'1', 'uae':'971', 'united arab emirates':'971', 'india':'91', 'egypt':'20',
+  'cameroon':'237', 'singapore':'65', 'poland':'48' };
+// Returns the number as digits with country code (no +), e.g. 08035742235 -> 2348035742235
+function intlDigits(phone, country) {
+  let raw = String(phone || '').trim();
+  if (!raw) return '';
+  const hasPlus = raw.startsWith('+');
+  let d = raw.replace(/\D/g, '');
+  if (!d) return '';
+  const ctry = String(country || '').trim().toLowerCase();
+  const code = ctry ? (DIAL_CODES[ctry] || '') : '234'; // blank country = assume Nigeria
+  if (hasPlus) return (code && d.startsWith(code + '0')) ? code + d.slice(code.length + 1) : d; // +234 0803... typed with the extra 0
+  if (d.startsWith('00')) return d.slice(2);
+  if (!code) return d;                                   // unknown country: use the number as typed
+  if (d.startsWith(code + '0')) return code + d.slice(code.length + 1); // +234 0803... typed with the extra 0
+  if (d.startsWith(code) && d.length >= code.length + 8) return d;
+  if (d.startsWith('0')) return code + d.slice(1);
+  if (code === '234' && /^[789]\d{9}$/.test(d)) return '234' + d;
+  return d;
+}
+function contactLinks(c) {
+  const d = intlDigits(c.phone, c.country);
+  return {
+    call: d ? 'tel:+' + d : '',
+    wa: d ? 'https://wa.me/' + d : '',
+    mail: c.email ? 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(c.email) : ''
+  };
+}
+// withText=true gives labelled buttons (detail page / alarm popup); false gives compact icons (list rows)
+function contactButtonsHTML(c, withText) {
+  const l = contactLinks(c);
+  const mk = (href, cls, icon, label, extra) => href
+    ? `<a class="cbtn ${cls}" href="${esc(href)}" ${extra} title="${label}">${icon}${withText ? ' ' + label : ''}</a>`
+    : `<span class="cbtn ${cls} off" title="${label}: not available">${icon}${withText ? ' ' + label : ''}</span>`;
+  return mk(l.call, 'call', '&#128222;', 'Call', '')
+       + mk(l.wa, 'wa', '&#128172;', 'WhatsApp', 'target="_blank" rel="noopener"')
+       + mk(l.mail, 'mail', '&#9993;', 'Email', 'target="_blank" rel="noopener"');
+}
+
 // ── Render list ──
 // "Contacted" = a last-contact date is set OR at least one comment has been logged
 function isContacted(c) { return !!c.lastcontact || !!(c.comments && c.comments.length); }
@@ -867,9 +921,10 @@ function render() {
       <td><span class="badge ${badgeClass}">${c.status}</span></td>
       <td style="color:var(--text-secondary);">${fmtDate(c.lastcontact)}</td>
       <td style="color:var(--text-secondary);">${fmtDateTime(c.followup, c.followuptime)}</td>
+      <td><div class="contact-actions">${contactButtonsHTML(c, false)}</div></td>
       <td style="text-align:right;"><button class="icon-btn" data-del="${c.id}" title="Delete" style="color:#a32d2d;">&times;</button></td>
     `;
-    tr.addEventListener('click', (e) => { if (e.target.closest('[data-del]')) return; openDetail(c.id); });
+    tr.addEventListener('click', (e) => { if (e.target.closest('[data-del]') || e.target.closest('.contact-actions')) return; openDetail(c.id); });
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('[data-del]').forEach(btn => {
@@ -889,6 +944,7 @@ function openDetail(id) {
   const c = clients.find(c => c.id === id);
   document.getElementById('listView').style.display = 'none';
   document.getElementById('detailView').style.display = 'block';
+  document.getElementById('d-contact').innerHTML = contactButtonsHTML(c, true);
   document.getElementById('d-avatar').textContent = c.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
   document.getElementById('d-name').textContent = c.name;
   document.getElementById('d-broker').textContent = c.broker || 'No broker';
@@ -1059,7 +1115,8 @@ function getAllReminders() {
       title: t.title,
       sub: c ? c.name : (t.notes || ''),
       dueAt: new Date(t.date + 'T' + (t.time || '09:00')).getTime(),
-      refId: t.id
+      refId: t.id,
+      clientId: t.clientId || null
     });
   });
   const dismissed = dismissedFollowupsMap(); // read once, not once per client (matters with thousands of contacts)
@@ -1075,6 +1132,7 @@ function getAllReminders() {
       sub: (c.broker ? c.broker + ' · ' : '') + 'Follow-up you scheduled',
       dueAt: new Date(fuKey).getTime(),
       refId: c.id,
+      clientId: c.id,
       followupDate: fuKey
     });
   });
@@ -1112,6 +1170,7 @@ function renderTaskGroup(label, items, isOverdue) {
       <input type="checkbox" class="task-checkbox" onchange="${i.kind==='task' ? `toggleTaskDone('${i.refId}')` : `dismissFollowupFromList('${i.refId}','${i.followupDate}')`}">
       <div><div class="task-title">${esc(i.title)}</div><div class="task-meta">${timeStr}${i.sub ? ' · ' + esc(i.sub) : ''}</div></div>
       <div class="task-actions">
+        ${(() => { const cl = i.clientId ? clients.find(c => c.id === i.clientId) : null; return cl ? `<span class="contact-actions" style="display:inline-flex;margin-right:4px;">${contactButtonsHTML(cl, false)}</span>` : ''; })()}
         ${i.kind==='task' ? `<button onclick="openTaskModal('${i.refId}')">Edit</button><button onclick="deleteTask('${i.refId}')" style="color:#a32d2d;">Delete</button>`
                           : `<button onclick="openDetail('${i.refId}')">View client</button>`}
       </div>
@@ -1279,6 +1338,8 @@ function showNextAlarm() {
   document.getElementById('alarmDoneBtn').textContent = isSummary ? 'Open Tasks' : 'Mark as done';
   document.getElementById('alarmSnoozeBtn').style.display = isSummary ? 'none' : '';
   document.getElementById('alarmDismissBtn').textContent = isSummary ? 'Close' : 'Dismiss for today';
+  const alarmClient = item.clientId ? clients.find(c => c.id === item.clientId) : null;
+  document.getElementById('alarmContact').innerHTML = alarmClient ? contactButtonsHTML(alarmClient, true) : '';
   document.getElementById('alarmTitle').textContent = item.title;
   document.getElementById('alarmSub').textContent = isSummary ? item.sub : new Date(item.dueAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + (item.sub ? ' · ' + item.sub : '');
   document.getElementById('alarmOverlay').classList.add('open');
