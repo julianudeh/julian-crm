@@ -260,6 +260,7 @@ tbody tr:hover { background: var(--bg-secondary); }
       <p class="nav-label" style="margin-top:14px;">Follow-ups</p>
       <div class="nav-item" data-view="tasks">&#9989; Tasks</div>
       <div class="nav-item" data-view="calendar">&#128197; Calendar</div>
+      <div class="nav-item" data-view="outreach">&#128228; Outreach</div>
       <div class="sidebar-footer">
         <div class="sync-status">
           <div class="sync-dot ok" id="syncDot"></div>
@@ -367,6 +368,29 @@ tbody tr:hover { background: var(--bg-secondary); }
             <div id="commentsList"></div>
           </div>
         </div>
+      </div>
+
+      <div id="outreachView" style="display:none;">
+        <div class="topbar"><h2>Daily WhatsApp outreach</h2></div>
+        <div class="card">
+          <p class="imp-note">This works through your contacts a few at a time. Each "Open in WhatsApp" button opens a personal chat with your message already typed. You press Send yourself. Once your daily number is done, the list stops and gives you the next batch tomorrow. WhatsApp does not publish a safe daily number, so start small, keep the message personal, and only raise the number if people reply well.</p>
+          <div class="form-row"><label>Your message (use {name} for their first name)</label><textarea id="ou-template" style="min-height:90px;"></textarea></div>
+          <div class="two-col">
+            <div class="form-row"><label>Contacts per day</label><input id="ou-perday" type="number" min="1" max="500"></div>
+            <div class="form-row"><label>Who to message</label>
+              <select id="ou-audience">
+                <option value="all">Everyone with a phone number</option>
+                <option value="notcontacted">Not contacted yet</option>
+                <option value="leads">Leads only</option>
+                <option value="clients">Clients only (not Leads)</option>
+              </select>
+            </div>
+          </div>
+          <label class="imp-check"><input type="checkbox" id="ou-setlast"> Set Last contact to today when I send</label>
+          <button id="ou-newround">Start a new round</button>
+        </div>
+        <div class="imp-summary" id="ou-progress"></div>
+        <div id="ou-list" style="margin-top:12px;"></div>
       </div>
 
       <div id="tasksView" style="display:none;">
@@ -503,6 +527,7 @@ const TOKEN_REFRESH_MS = 45 * 60 * 1000; // NEW: silently refresh the Google tok
 let accessToken = null;
 let driveFileId = null;
 let clients = [];
+let outreach = defaultOutreach(); // daily WhatsApp outreach settings (synced with the rest of the data)
 let tasks = []; // NEW: standalone to-do items, separate from client "next follow-up" reminders
 let editId = null;
 let activeClientId = null;
@@ -519,7 +544,7 @@ let calSelectedDate = null;
 // ── NEW: local backup helpers (this is the actual fix for "data only ever lived in memory") ──
 function saveLocalBackup() {
   try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify({ clients, tasks, savedAt: Date.now() }));
+    localStorage.setItem(LOCAL_KEY, JSON.stringify({ clients, tasks, outreach, savedAt: Date.now() }));
   } catch (e) {
     // storage full or unavailable - Drive is still the primary copy, but say so instead of failing silently
     if (!window._localBackupWarned) { window._localBackupWarned = true; showToast("This browser's backup copy is full, so only Google Drive is saving. Use Export CSV now and then."); }
@@ -573,6 +598,7 @@ function signOut() {
     driveFileId = null;
     clients = [];
     tasks = [];
+    outreach = defaultOutreach();
     clearInterval(tokenRefreshInterval);
     clearInterval(alarmCheckInterval);
     document.getElementById('app').style.display = 'none';
@@ -615,7 +641,7 @@ async function loadFromDrive() {
       { headers: { Authorization: 'Bearer ' + accessToken } }
     );
     const listData = await listResp.json();
-    let driveClients = [], driveTasks = [];
+    let driveClients = [], driveTasks = [], driveOutreach = null;
     if (listData.files && listData.files.length > 0) {
       driveFileId = listData.files[0].id;
       const fileResp = await fetch(
@@ -625,8 +651,9 @@ async function loadFromDrive() {
       const driveData = await fileResp.json();
       // NEW: the file used to just be a raw array of clients (pre-Tasks/Calendar). Handle both shapes.
       if (Array.isArray(driveData)) { driveClients = driveData; driveTasks = []; }
-      else { driveClients = driveData.clients || []; driveTasks = driveData.tasks || []; }
+      else { driveClients = driveData.clients || []; driveTasks = driveData.tasks || []; driveOutreach = driveData.outreach || null; }
     }
+    outreach = Object.assign(defaultOutreach(), driveOutreach || {});
 
     // NEW: before trusting Drive blindly, compare against this browser's own local backup.
     // This is the actual fix for the "12 became 6" bug — we no longer silently overwrite
@@ -653,7 +680,7 @@ async function loadFromDrive() {
     // NEW: if Drive can't be reached at all, fall back to the local backup instead of an empty CRM
     const local = loadLocalBackup();
     if (local && Array.isArray(local.clients)) {
-      clients = local.clients; tasks = local.tasks || [];
+      clients = local.clients; tasks = local.tasks || []; outreach = Object.assign(defaultOutreach(), local.outreach || {});
       setSyncStatus('error', "Couldn't reach Drive — showing this browser's saved copy");
       render(); renderTasks(); renderCalendar();
     } else {
@@ -671,7 +698,7 @@ function showConflictBanner(localClients, localTasks, driveClients, driveTasks) 
     `This usually means some changes never made it to Drive. Which version do you want to keep?`;
   banner.classList.add('show');
   document.getElementById('conflictKeepLocal').onclick = () => {
-    clients = localClients; tasks = localTasks;
+    clients = localClients; tasks = localTasks; outreach = Object.assign(defaultOutreach(), (loadLocalBackup() || {}).outreach || {});
     banner.classList.remove('show');
     debouncedSave(true);
     render(); renderTasks(); renderCalendar();
@@ -688,7 +715,7 @@ function showConflictBanner(localClients, localTasks, driveClients, driveTasks) 
 
 async function createDriveFile() {
   const meta = JSON.stringify({ name: FILE_NAME, parents: ['appDataFolder'] });
-  const body = JSON.stringify({ clients, tasks });
+  const body = JSON.stringify({ clients, tasks, outreach });
   const form = new FormData();
   form.append('metadata', new Blob([meta], { type: 'application/json' }));
   form.append('file', new Blob([body], { type: 'application/json' }));
@@ -703,7 +730,7 @@ async function createDriveFile() {
 async function saveToDrive() {
   setSyncStatus('saving', 'Saving...');
   try {
-    const body = JSON.stringify({ clients, tasks });
+    const body = JSON.stringify({ clients, tasks, outreach });
     if (!driveFileId) { await createDriveFile(); pendingSave = false; setSyncStatus('ok', 'Synced to Drive'); return; }
     const resp = await fetch(
       'https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=media',
@@ -790,6 +817,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     currentNavView = el.getAttribute('data-view');
     listPage = 0;
     if (currentNavView === 'tasks') { showTasksView(); renderTasks(); return; }
+    if (currentNavView === 'outreach') { showOutreachView(); return; }
     if (currentNavView === 'calendar') { showCalendarView(); renderCalendar(); return; }
     document.getElementById('listTitle').textContent =
       currentNavView === 'clients' ? 'Clients' : currentNavView === 'leads' ? 'Leads' : 'All records';
@@ -802,6 +830,7 @@ function hideAllViews() {
   document.getElementById('detailView').style.display = 'none';
   document.getElementById('tasksView').style.display = 'none';
   document.getElementById('calendarView').style.display = 'none';
+  document.getElementById('outreachView').style.display = 'none';
 }
 function showListView() {
   hideAllViews();
@@ -1704,6 +1733,113 @@ function undoLastImport() {
   renderImportUndo();
   showToast(removable.length.toLocaleString() + ' imported contacts removed');
 }
+
+
+/* ══════════════════════════════════════════════════════════════
+   DAILY WHATSAPP OUTREACH
+   Works through your contacts a few at a time. You press Send in WhatsApp yourself,
+   one personal chat at a time. The CRM keeps count, stops at your daily number,
+   and gives you the next batch tomorrow.
+   ══════════════════════════════════════════════════════════════ */
+function defaultOutreach() {
+  return { id: 'k1', template: 'Hello {name}, this is Julian. I wanted to check in with you. Are you free to talk today?', perDay: 25, audience: 'all', setLast: true };
+}
+const OUTREACH_RANK = { Active:0, Strong:1, Promising:2, Lead:3, Weak:4, Inactive:5, Dormant:6 };
+function firstNameOf(c) {
+  const n = String(c.name || '').trim();
+  if (!n || n.includes('@') || /^\d/.test(n)) return 'there';
+  return n.split(/\s+/)[0];
+}
+function outreachMessage(c) {
+  return String(outreach.template || '').replace(/\{name\}/gi, firstNameOf(c)).replace(/\{fullname\}/gi, c.name || '');
+}
+function inOutreachAudience(c) {
+  if (!intlDigits(c.phone, c.country)) return false;
+  if (outreach.audience === 'notcontacted') return !isContacted(c);
+  if (outreach.audience === 'leads') return c.status === 'Lead';
+  if (outreach.audience === 'clients') return c.status !== 'Lead';
+  return true;
+}
+function showOutreachView() {
+  hideAllViews();
+  document.getElementById('outreachView').style.display = 'block';
+  document.getElementById('ou-template').value = outreach.template;
+  document.getElementById('ou-perday').value = outreach.perDay;
+  document.getElementById('ou-audience').value = outreach.audience;
+  document.getElementById('ou-setlast').checked = !!outreach.setLast;
+  renderOutreachList();
+}
+function renderOutreachList() {
+  const today = todayStr();
+  const id = outreach.id;
+  const perDay = Math.max(1, Number(outreach.perDay) || 1);
+  const eligible = clients.filter(inOutreachAudience);
+  const isSent = c => c.waCampaign === id && !!c.waDate;
+  const sentCount = eligible.filter(isSent).length;
+  const pendingAll = eligible.filter(c => !isSent(c) && c.waSkip !== id);
+  pendingAll.sort((a, b) => (OUTREACH_RANK[a.status] ?? 9) - (OUTREACH_RANK[b.status] ?? 9)); // best relationships first
+  const sentToday = clients.filter(c => c.waCampaign === id && c.waDate === today);
+  const slots = Math.max(0, perDay - sentToday.length);
+  const batch = pendingAll.slice(0, slots);
+  const daysLeft = Math.ceil(pendingAll.length / perDay);
+
+  document.getElementById('ou-progress').innerHTML =
+    `<b>${sentCount.toLocaleString()}</b> of <b>${eligible.length.toLocaleString()}</b> contacts messaged in this round. ` +
+    `<b>${pendingAll.length.toLocaleString()}</b> left, about <b>${daysLeft.toLocaleString()}</b> more day${daysLeft === 1 ? '' : 's'} at ${perDay} a day.<br>` +
+    `Today: <b>${sentToday.length}</b> of ${perDay} done.`;
+
+  let html = '';
+  if (batch.length) {
+    html += `<div class="imp-note">Preview for ${esc(batch[0].name)}: "${esc(outreachMessage(batch[0]))}"</div>`;
+    html += `<table class="data-table"><thead><tr><th>Name</th><th>Phone</th><th>Status</th><th></th></tr></thead><tbody>` +
+      batch.map(c => {
+        const digits = intlDigits(c.phone, c.country);
+        const href = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(outreachMessage(c));
+        return `<tr style="cursor:default;"><td style="font-weight:500;">${esc(c.name)}${c.broker ? `<div class="row-sub">${esc(c.broker)}</div>` : ''}</td>` +
+          `<td>${esc(c.phone)}</td><td><span class="badge badge-${String(c.status).toLowerCase()}">${esc(c.status)}</span></td>` +
+          `<td><div style="display:flex; gap:6px; justify-content:flex-end;">` +
+          `<a class="cbtn wa" data-send="${c.id}" href="${esc(href)}" target="waoutreach" rel="noopener">&#128172; Open in WhatsApp</a>` +
+          `<button data-skip="${c.id}" style="height:30px; padding:0 10px; font-size:13px;">Skip</button></div></td></tr>`;
+      }).join('') + `</tbody></table>`;
+  } else if (pendingAll.length === 0) {
+    html += `<div class="empty-state">Everyone in this group has been messaged. Change "Who to message", or start a new round.</div>`;
+  } else {
+    html += `<div class="empty-state"><b>Today's limit of ${perDay} is done.</b><br>Come back tomorrow for the next ${Math.min(perDay, pendingAll.length)}.</div>`;
+  }
+  if (sentToday.length) {
+    html += `<div class="task-group-label">Sent today (${sentToday.length})</div>` +
+      sentToday.map(c => `<div class="task-row"><div style="width:19px;">&#10003;</div><div><div class="task-title">${esc(c.name)}</div><div class="task-meta">${esc(c.phone || '')}</div></div>` +
+        `<div class="task-actions"><button data-undo="${c.id}">Undo</button></div></div>`).join('');
+  }
+  document.getElementById('ou-list').innerHTML = html;
+}
+document.getElementById('ou-list').addEventListener('click', (e) => {
+  const send = e.target.closest('[data-send]');
+  if (send) { // the link itself opens WhatsApp; we just record it
+    const c = clients.find(x => x.id === send.dataset.send);
+    if (c) {
+      c.waCampaign = outreach.id; c.waDate = todayStr();
+      if (outreach.setLast) c.lastcontact = todayStr();
+      debouncedSave();
+      setTimeout(renderOutreachList, 300);
+    }
+    return;
+  }
+  const skip = e.target.closest('[data-skip]');
+  if (skip) { const c = clients.find(x => x.id === skip.dataset.skip); if (c) { c.waSkip = outreach.id; debouncedSave(); renderOutreachList(); } return; }
+  const undo = e.target.closest('[data-undo]');
+  if (undo) { const c = clients.find(x => x.id === undo.dataset.undo); if (c) { delete c.waCampaign; delete c.waDate; debouncedSave(); renderOutreachList(); } }
+});
+document.getElementById('ou-template').addEventListener('input', (e) => { outreach.template = e.target.value; debouncedSave(); renderOutreachList(); });
+document.getElementById('ou-perday').addEventListener('input', (e) => { outreach.perDay = Math.max(1, Math.min(500, Number(e.target.value) || 1)); debouncedSave(); renderOutreachList(); });
+document.getElementById('ou-audience').addEventListener('change', (e) => { outreach.audience = e.target.value; debouncedSave(); renderOutreachList(); });
+document.getElementById('ou-setlast').addEventListener('change', (e) => { outreach.setLast = e.target.checked; debouncedSave(); });
+document.getElementById('ou-newround').addEventListener('click', () => {
+  if (!confirm('Start a new round? Everyone becomes "not yet messaged" again for the new round.')) return;
+  outreach.id = 'k' + Date.now().toString(36);
+  debouncedSave();
+  renderOutreachList();
+});
 
 </script>
 </body>
